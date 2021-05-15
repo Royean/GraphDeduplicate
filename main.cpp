@@ -19,7 +19,7 @@ int main(int argc, char* args[]) {
  
     // build the conflict graph from the three-column table here. 
     // The graph is stored in *neighbor* in the form of a 2-D array.
-    duplicator.build_conflict_graph();
+    
     clock_t end = clock();
 
     // // the input array is sorted since here, cannot reference the vertex with its original id. 
@@ -36,16 +36,17 @@ int main(int argc, char* args[]) {
     duplicator.count_expand_edges();
 
     // invoke the deduplication algorithm for comparison.
-    start = clock();
-    duplicator.dedup1();
-    end = clock();
-    printf("DeDup1 Deduplication time:%fs\n", (double)(end - start) / CLOCKS_PER_SEC);
+    // start = clock();
+    // duplicator.dedup1();
+    // end = clock();
+    // printf("DeDup1 Deduplication time:%fs\n", (double)(end - start) / CLOCKS_PER_SEC);
 
-    // // deduplicate the condensed graph
-    start = clock();
-    duplicator.deduplicateBySearch(mvc, mis);
-    end = clock();
-    printf("Search Deduplication time:%fs\n", (double)(end - start) / CLOCKS_PER_SEC);
+    // // // deduplicate the condensed graph
+    // start = clock();
+    // duplicator.build_conflict_graph();
+    // duplicator.deduplicateBySearch(mvc, mis);
+    // end = clock();
+    // printf("Search Deduplication time:%fs\n", (double)(end - start) / CLOCKS_PER_SEC);
     
     start = clock();
     duplicator.deduplicateBySetCover();
@@ -53,7 +54,7 @@ int main(int argc, char* args[]) {
     printf("Set Cover Deduplication time:%fs\n", (double)(end - start) / CLOCKS_PER_SEC);  
 
     // start = clock();
-    // duplicator.deduplicateBySetCover();
+    // duplicator.deduplicateByAdvancedSearch();
     // end = clock();
     // printf("Set Cover Deduplication time:%fs\n", (double)(end - start) / CLOCKS_PER_SEC);  
     

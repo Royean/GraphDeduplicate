@@ -220,6 +220,12 @@ void GraphDeduplicator::deduplicateBySetCover(){
         }
     }
 
+    ui conflicts = 0;
+    for(int i = 0;i <edges.size();i++){
+        conflicts += counter[i];
+    }
+    printf("there are %d conflicts.\n", conflicts / 4);
+    
     ui* src = new ui[edges.size()];
     for(int i = 0, s = input.size() + RM + LM;i < s;i++){
         for(int e = Vnode[i];e != -1;e = next[e]){
@@ -246,6 +252,7 @@ void GraphDeduplicator::deduplicateBySetCover(){
         }
     }
     
+    int delete_edges = 0;
     // resolve the conflicts until empty.
     for(int i = max_freq;i > 0;){
         while(i > 0 && Order[i] == -1){ i--;}
@@ -264,11 +271,14 @@ void GraphDeduplicator::deduplicateBySetCover(){
                     counter[j] = 0;
                     int s = src[j],  d = edges[j].node_id, type = edges[j].isVirtual;
                     ui* tag = nullptr;
+                    delete_edges++;
                     if(type == -1){    // d on the left side
+                        // printf("delete (%d, %d)L\n", s, d);
                         d += input.size();
                         tag = right_tag;
                     }
                     else if(type == 1){     //d on the right side
+                        // printf("delete (%d, %d)R\n", s, d);
                         d += input.size() + LM;
                         tag = left_tag;
                     }
@@ -328,7 +338,7 @@ void GraphDeduplicator::deduplicateBySetCover(){
         if(j == -1) Order[i]= -1;
     }
 
-    
+    printf("delete edges:%d\n", delete_edges);
     // postprocess the degree one cases.
     for(int i = 0;i < input.size();i++){
         int left_nb = 0, right_nb = 0, l = 0, r = 0;
@@ -374,9 +384,11 @@ void GraphDeduplicator::deduplicateBySetCover(){
             if(IsEdge[e]){
                 c++;
                 if(edges[e].isVirtual == -1){
+                    // printf("%d %dL\n",input[i].input_node_id, edges[e].node_id);
                     left_nb++;
                 }
                 else if(edges[e].isVirtual == 1){
+                    // printf("%d %dR\n",input[i].input_node_id, edges[e].node_id);
                     right_nb++;
                 }
             }
@@ -754,7 +766,16 @@ void GraphDeduplicator::deduplicateBySearch(const vector<int>& mvc, const vector
     delete[] tag;
     printf("****************Search****************\n");
     report_result();
+    // print_graph();
 }
+
+// advanced search, combine set cover and search method.
+void GraphDeduplicator::deduplicateByAdvancedSearch(){
+
+
+    printf("****************Advanced Search****************\n");
+}
+
 
 // count the number of edges after deduplication and report the compression ratio.
 void GraphDeduplicator::report_result(){

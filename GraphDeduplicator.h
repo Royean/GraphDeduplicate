@@ -36,7 +36,7 @@ class GraphDeduplicator {
         void build_conflict_graph();
         void construct_graphTopology();
         void assign_vertex_weight(int k);
-        set<int> MVC(const vector<int>& weight, const vector<vector<int>>& neighbour, set<int>& mis);
+        // set<int> MVC(const vector<int>& weight, const vector<vector<int>>& neighbour, set<int>& mis);
 
         void dedup1();
         
@@ -51,6 +51,8 @@ class GraphDeduplicator {
         void deduplicateBySetCover();
         void insert_edge(int u, int v, bool left);
        
+        void deduplicateByAdvancedSearch();
+        
         void report_result();
         void print_graph();
         int count_expand_edges();
