@@ -1,13 +1,53 @@
-#ifndef _BUILD_GRAPH_H
-#define _BUILD_GRAPH_H
+#pragma once
 
-#include "Graph.h"
+// #include "Graph.h"
 #include <vector>
 #include <set>
 #include <map>
 #include <string>
 
 using namespace std;
+typedef vector<int> VI;
+typedef unsigned int ui;
+
+struct NODE_COMMON_NEIGHBOUR {
+    int node_id;
+    set<int> left_common_neighbour;
+    set<int> right_common_neighbour;
+    NODE_COMMON_NEIGHBOUR(int id);
+    NODE_COMMON_NEIGHBOUR(int id, set<int> lcn, set<int> rcn);
+};
+
+struct NODE {
+    ui input_node_id;
+    set<int> left;
+    set<int> right;
+	set<int> left_del;
+	set<int> right_del;
+    vector<NODE_COMMON_NEIGHBOUR> common_neighbour;
+    NODE(int id);
+    NODE(int id, set<int> left, set<int> right);
+};
+
+
+struct EDGE {
+    int u;
+    int v;
+    EDGE(int u, int v);
+};
+
+struct OUT_NODE {
+    int isVirtual; // 0 is false, 1 is true
+    int node_id;
+    OUT_NODE(int isVirtual, int node_id);
+};
+
+typedef vector<vector<OUT_NODE>> VVON;
+
+
+int Rand(int i);
+
+enum method {search = 1, cover = 2};
 
 class GraphDeduplicator {
     
@@ -38,6 +78,9 @@ class GraphDeduplicator {
         void assign_vertex_weight(int k);
         // set<int> MVC(const vector<int>& weight, const vector<vector<int>>& neighbour, set<int>& mis);
 
+
+        
+        void greedyDedup();
         void dedup1();
         
         void deduplicateBySearch(const vector<int>& mvc, const vector<int>& mis);
@@ -48,15 +91,27 @@ class GraphDeduplicator {
         // OUT_NODE* edge = new OUT_NODE[];
         vector<OUT_NODE> edges;
         vector<ui> next;
+
         void deduplicateBySetCover();
         void insert_edge(int u, int v, bool left);
        
-        void deduplicateByAdvancedSearch();
+        void deduplicateByWeightedSetCover();
+        void deduplicateWithNegaEdge();
         
+        // void negativeEdgeEnhance();
+
+        vector<int> getNeigbor(int k, method algo);
+        void bfsTest(int iter);
+        void k_core(int iter);
+
+        // void duplicateTest(int iterations);
+
+        void degreeTest(int iter);
+        void pagerankTest(int iter);
+
         void report_result();
         void print_graph();
         int count_expand_edges();
         void compute_mis_benefit(vector<int>& mis);
 };
 
-#endif

@@ -8,35 +8,6 @@
 #include <set>
 #include <map>
 
-NODE_COMMON_NEIGHBOUR::NODE_COMMON_NEIGHBOUR(int id) {
-    this->node_id = id;
-}
-
-NODE_COMMON_NEIGHBOUR::NODE_COMMON_NEIGHBOUR(int id, set<int> lcn, set<int> rcn) {
-    this->node_id = id;
-    this->left_common_neighbour = lcn;
-    this->right_common_neighbour = rcn;
-}
-
-NODE::NODE(int id) {
-    this->input_node_id = id;
-}
-
-NODE::NODE(int id, set<int> left, set<int> right) {
-    this->input_node_id = id;
-    this->left = left;
-    this->right = right;
-}
-
-EDGE::EDGE(int u, int v) {
-    this->u = u;
-    this->v = v;
-}
-
-OUT_NODE::OUT_NODE(int isVirtual, int node_id) {
-    this->isVirtual = isVirtual;
-    this->node_id = node_id;
-}
 
 // used for MIS
 Vertex* head = nullptr;
