@@ -1,6 +1,6 @@
 import json
 
-file = r'roles.json'
+file = r'imdb_ijs_roles.json'
 left_dict = {}
 mid_dict = {}
 
@@ -8,8 +8,8 @@ mid_dict = {}
 with open(file) as f:
     dic = json.load(f)
     for l in dic["RECORDS"]:
-        mid_node = l['actor_id']
-        left_node = l['movie_id']
+        mid_node = l['l_partkey']
+        left_node = l['l_orderkey']
         # if(mid_dict.get(left_node, None)) == None:
         #     mid_dict[left_node] = 1
         # else:
@@ -34,7 +34,7 @@ for key in left_dict.keys():
 count = 0
 # # print(sorted(intersec))
 # # extract graph
-with open('imdb-ijs.tri','w') as f:
+with open('roles.tri','w') as f:
     for key in left_dict.keys():
         f.write(str(count) + " ")
         count += 1

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstring>
 #include <fstream>
+#include <cmath>
 #include <set>
 #include <map>
 #include <vector>
@@ -10,62 +11,19 @@
 #include <utility>
 #include <iostream>
 #include <ctime>
+#include "Utility.h"
 #include "GraphDeduplicator.h"
 #include "assert.h"
-#define EPSINON 1e-6
+
+
 #define DEBUG
+// using namespace std;
 
-int Rand(int i){
-    return rand()%i;
-}
+extern bool compare(const NODE& x, const NODE& y); 
 
-NODE_COMMON_NEIGHBOUR::NODE_COMMON_NEIGHBOUR(int id) {
-    this->node_id = id;
-}
+extern vector<string> split_line(string line, string delimiter);
 
-NODE_COMMON_NEIGHBOUR::NODE_COMMON_NEIGHBOUR(int id, set<int> lcn, set<int> rcn) {
-    this->node_id = id;
-    this->left_common_neighbour = lcn;
-    this->right_common_neighbour = rcn;
-}
-
-NODE::NODE(int id) {
-    this->input_node_id = id;
-}
-
-NODE::NODE(int id, set<int> left, set<int> right) {
-    this->input_node_id = id;
-    this->left = left;
-    this->right = right;
-}
-
-EDGE::EDGE(int u, int v) {
-    this->u = u;
-    this->v = v;
-}
-
-OUT_NODE::OUT_NODE(int isVirtual, int node_id) {
-    this->isVirtual = isVirtual;
-    this->node_id = node_id;
-}
-using namespace std;
-
-vector<string> split_line(string line, string delimiter = "\r\t\n ") {
-    std::size_t pre_pos, pos;
-    vector<string> res;
-    pre_pos = 0;
-    pos = line.find_first_of(delimiter, pre_pos);
-    while (pos != std::string::npos) {
-        res.push_back(line.substr(pre_pos, pos - pre_pos));
-        pre_pos = pos + 1;
-        pos = line.find_first_of(delimiter, pre_pos);
-    }
-    if (pre_pos != pos) {
-        res.push_back(line.substr(pre_pos, pos - pre_pos));
-    }
-    return res;
-}
-
+extern int Rand(int i);
 
 inline set<int> set_intersec(set<int>& a, set<int>& b) {
     set<int> tmp;
@@ -95,9 +53,25 @@ inline size_t argmax(ForwardIterator first, ForwardIterator last)
     return std::distance(first, std::max_element(first, last));
 }
 
-GraphDeduplicator::GraphDeduplicator(char* filename) {
+GraphDeduplicator::GraphDeduplicator(vector<NODE> input){
+    // 
+    this->input = input;
+    for(auto& node : input){
+        for(auto& e : node.left){
+            LM = max(LM, e + 1);
+        }
+        for(auto& e : node.right){
+            RM = max(RM, e + 1);
+        }
+    }
+    for (int i = 0; i < input.size(); ++i) {
+        neighbour.push_back({});
+    }
+}
+
+GraphDeduplicator::GraphDeduplicator(string filename) {
     // read file
-    ifstream ifs(filename, std::ifstream::in);
+    ifstream ifs("./trigraph/" + filename, std::ifstream::in);
     if (ifs) {
         string line;
         while (getline(ifs, line)) {
@@ -105,7 +79,7 @@ GraphDeduplicator::GraphDeduplicator(char* filename) {
             if (line[0] == '#' || line[0] == '%') {
                 continue;
             }
-            vector<string> content = split_line(line);
+            vector<string> content = split_line(line, "\r\t\n ");
             int mid = atoi(content[0].c_str());
             int k = 1;
             int left_len = atoi(content[k++].c_str());
@@ -122,7 +96,7 @@ GraphDeduplicator::GraphDeduplicator(char* filename) {
                 right_tmp.insert(temp);
                 RM = max(RM, temp+1);
             }
-            raw_edge_tot += (left_len + right_len);
+            // raw_edge_tot += (left_len + right_len);
             NODE node(mid, left_tmp, right_tmp);
             input.push_back(node);
         }
@@ -475,10 +449,22 @@ void GraphDeduplicator::build_conflict_graph() {
 
 void GraphDeduplicator::dedup1(){
     build_revertedIDX_for_realNodes();
-    set<pair<int,int>> redundant_edges;
     
+    set<pair<int,int>> redundant_edges;
+    // set<pair<int,int>> redundant_edges;
+    VVON tmp(out_left);
+    // shuffle the vertices.
+    srand(unsigned(time(0)));
+    random_shuffle(tmp.begin(), tmp.end(), Rand);
+
     // random_shuffle();
-    for(auto& real_node : out_left){
+    int s = 1;
+    for(auto& real_node : tmp){
+        // if(s == 1){
+        //     // cout<< real_node << endl;
+        //     // printf("%d \n", real_node[0].node_id);
+        //     s++;
+        // }
         set<int> processed;
         for(auto& vn : real_node){
             // some right neighbors of this virtual node are deleted in previous iterations.
@@ -502,7 +488,6 @@ void GraphDeduplicator::dedup1(){
 
     out_left.clear();
     out_right.clear();
-    
     for(auto& vn : input){
         int a = vn.left.size() - vn.left_del.size(), b = vn.right.size() - vn.right_del.size();
         if(a * b < a + b){
@@ -518,7 +503,6 @@ void GraphDeduplicator::dedup1(){
         }
     }
 
-    
     build_revertedIDX_for_realNodes();
 
     // put the redundant edges back.
@@ -541,8 +525,6 @@ void GraphDeduplicator::dedup1(){
     printf("****************DeDup1****************\n");
     report_result();
 
-
-    // clean up 
     for(auto& n : input){
         n.left_del.clear();
         n.right_del.clear();
@@ -557,181 +539,275 @@ void GraphDeduplicator::greedyDedup(){
     build_revertedIDX_for_realNodes();
     
     // count the degree
-    clock_t start = clock();
-    int iterations = 1000;
-    int count = 0;
-    while(iterations--){
-        vector<int> flag(out_left.size(), 0);
-        for(auto& l : out_left){
-            vector<int> t;
-            // set<int> tmp;
-            for(auto& node : l){
-                if(node.isVirtual){
-                    for(auto& r : input[node.node_id].right){
-                        // t.insert(r);
-                        if(!flag[r]){
-                            t.push_back(r);
-                            flag[r] = 1;
-                        }
-                        
-                        // count++;
-                    }
-                }
-                else{
-                    if(!flag[node.node_id]){
-                        t.push_back(node.node_id);
-                        flag[node.node_id] = 1;
-                    }
-                    // t.push_back(node.node_id);
-                    // count++;
-                }
-            }
-            // 
-            for(auto& x : t){
-                flag[x] = 0;
-            }
-            // sort(t.begin(), t.end());
-            // t.erase(unique(t.begin(), t.end()), t.end());
-        }
-    }
-    clock_t end = clock();
-    printf("condensed graph count degree time cost:%fs count : %d \n", (double)(end - start) / CLOCKS_PER_SEC, count);
+    // clock_t start = clock();
+    // int iterations = 1;
+    // int count = 0;
+    // int invalid = 0;
+    // int total = 0;
+    // while(iterations--){
+    //     vector<int> flag(out_left.size(), 0);
+    //     for(auto& l : out_left){
+    //         vector<int> t;
+    //         // set<int> tmp;
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     // t.insert(r);
+    //                     if(!flag[r]){
+    //                         t.push_back(r);
+    //                         flag[r] = 1;
+    //                     }
+    //                     // else{
+    //                     //     invalid++;
+    //                     // }
+    //                     invalid++;
+    //                     total++;
+    //                 }
+    //             }
+    //             else{
+    //                 if(!flag[node.node_id]){
+    //                     t.push_back(node.node_id);
+    //                     flag[node.node_id] = 1;
+    //                 }
+    //                 // else{
+    //                 //     invalid++;
+    //                 // }
+    //                 // total++;
+    //                 // t.push_back(node.node_id);
+    //                 // count++;
+    //             }
+    //         }
+    //         // 
+    //         for(auto& x : t){
+    //             flag[x] = 0;
+    //         }
+    //         total += t.size();
+    //         // sort(t.begin(), t.end());
+    //         // t.erase(unique(t.begin(), t.end()), t.end());
+    //     }
+    //     printf("invalid:%d total:%d ratio:%f\n",invalid, total, invalid * 1.0 / total);
+    // }
+    // clock_t end = clock();
+    // printf("condensed graph count degree time cost:%fs count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);
 
     // k-core for duplicate graphs. 
-    start = clock();
-    int k = 4;
-    iterations = 1000;
-    while(iterations--){
-        vector<int> k_list;
-        vector<int> visited(out_left.size(), 0);
-        vector<int> deg(out_left.size(), 0);
-        vector<int> flag(out_left.size(), 0);   
-        for(int i = 0, s = out_left.size();i < s;i++){
-            auto& l = out_left[i]; 
+    // start = clock();
+    // int k = 4;
+    // iterations =10;
+    // while(iterations--){
+    //     vector<int> k_list;
+    //     vector<int> visited(out_left.size(), 0);
+    //     vector<int> deg(out_left.size(), 0);
+    //     vector<int> flag(out_left.size(), 0);   
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         auto& l = out_left[i]; 
             
-            // count the degree.
-            vector<int> t;
-            // set<int> tmp;
-            for(auto& node : l){
-                if(node.isVirtual){
-                    for(auto& r : input[node.node_id].right){
-                        // t.insert(r);
-                        // t.push_back(r);
-                        // count++;
-                        if(!flag[r]){
-                            t.push_back(r);
-                            flag[r] = 1;
-                        }
-                    }
-                }
-                else{
-                    if(!flag[node.node_id]){
-                        t.push_back(node.node_id);
-                        flag[node.node_id] = 1;
-                    }
+    //         // count the degree.
+    //         vector<int> t;
+    //         // set<int> tmp;
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     // t.insert(r);
+    //                     // t.push_back(r);
+    //                     // count++;
+    //                     if(!flag[r]){
+    //                         t.push_back(r);
+    //                         flag[r] = 1;
+    //                     }
+    //                 }
+    //             }
+    //             else{
+    //                 if(!flag[node.node_id]){
+    //                     t.push_back(node.node_id);
+    //                     flag[node.node_id] = 1;
+    //                 }
                     
-                    // t.push_back(node.node_id);
-                    // count++;
-                }
-            }
-            // sort(t.begin(), t.end());
-            // t.erase(unique(t.begin(), t.end()), t.end());
-            for(auto& x : t){
-                flag[x] = 0;
-            }
-            deg[i] = t.size();
-            if(count < k){
-                k_list.push_back(i);
-            }
-        }   
+    //                 // t.push_back(node.node_id);
+    //                 // count++;
+    //             }
+    //         }
+    //         // sort(t.begin(), t.end());
+    //         // t.erase(unique(t.begin(), t.end()), t.end());
+    //         for(auto& x : t){
+    //             flag[x] = 0;
+    //         }
+    //         deg[i] = t.size();
+    //         if(count < k){
+    //             k_list.push_back(i);
+    //         }
+    //     }   
         
-        while(!k_list.empty()){
-            int head = k_list.back();
-            k_list.pop_back();
-            // degree of head < k
-            // remove this vertex and update its adjacent neighbors.
-            visited[head] = 1;
-            auto& l = out_left[head];    
-            // count the degree.
+    //     while(!k_list.empty()){
+    //         int head = k_list.back();
+    //         k_list.pop_back();
+    //         // degree of head < k
+    //         // remove this vertex and update its adjacent neighbors.
+    //         visited[head] = 1;
+    //         auto& l = out_left[head];    
+    //         // count the degree.
             
-            vector<int> t;
-            // set<int> tmp;
-            for(auto& node : l){
-                if(node.isVirtual){
-                    for(auto& r : input[node.node_id].right){
-                        // t.insert(r);
-                        // t.push_back(r);
-                        // count++;
-                        if(!flag[r]){
-                            t.push_back(r);
-                            flag[r] = 1;
-                        }
-                    }
-                }
-                else{
-                    if(!flag[node.node_id]){
-                        t.push_back(node.node_id);
-                        flag[node.node_id] = 1;
-                    }
-                    // t.push_back(node.node_id);
-                    // count++;
-                }
-            }
-            // sort(t.begin(), t.end());
-            // t.erase(unique(t.begin(), t.end()), t.end());
+    //         vector<int> t;
+    //         // set<int> tmp;
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     // t.insert(r);
+    //                     // t.push_back(r);
+    //                     // count++;
+    //                     if(!flag[r]){
+    //                         t.push_back(r);
+    //                         flag[r] = 1;
+    //                     }
+    //                 }
+    //             }
+    //             else{
+    //                 if(!flag[node.node_id]){
+    //                     t.push_back(node.node_id);
+    //                     flag[node.node_id] = 1;
+    //                 }
+    //                 // t.push_back(node.node_id);
+    //                 // count++;
+    //             }
+    //         }
+    //         // sort(t.begin(), t.end());
+    //         // t.erase(unique(t.begin(), t.end()), t.end());
 
-            for(auto& r : t){
-                deg[r]--;
-                if(!visited[r] && deg[r] < k){
-                    k_list.push_back(r);
-                }
-            }
-        }
-    }
-    end = clock();
-    printf("condensed k-core time cost:%fs \n", (double)(end - start) / CLOCKS_PER_SEC);
+    //         for(auto& r : t){
+    //             deg[r]--;
+    //             if(!visited[r] && deg[r] < k){
+    //                 k_list.push_back(r);
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("condensed k-core time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
     
     // bfs 
-    start = clock();
-    iterations = 1000;
-    while(iterations--){
-        vector<int> k_list;
-        vector<int> visited(out_left.size(), 0);
-        // vector<int> deg(out_left.size(), 0);
-        for(int i = 0, s = out_left.size();i < s;i++){
-            if(!visited[i]){
-                // 
-                queue<int> q;
-                q.push(i);
-                visited[i] = 1;
-                while(!q.empty()){
-                    int v = q.front();
-                    q.pop();
-                    auto& l = out_left[v];    
-                    // set<int> tmp;
-                    for(auto& node : l){
-                        if(node.isVirtual){
-                            for(auto& r : input[node.node_id].right){
-                                if(!visited[r]){
-                                    visited[r] = 1;
-                                    q.push(r);
-                                }
-                            }
-                        }
-                        else{
-                            visited[node.node_id] = 1;
-                            q.push(node.node_id);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    end = clock();
-    printf("condensed bfs time cost:%fs \n", (double)(end - start) / CLOCKS_PER_SEC);
+    // start = clock();
+    // iterations =10;
+    // while(iterations--){
+    //     vector<int> k_list;
+    //     vector<int> visited(out_left.size(), 0);
+    //     // vector<int> deg(out_left.size(), 0);
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         if(!visited[i]){
+    //             // 
+    //             queue<int> q;
+    //             q.push(i);
+    //             visited[i] = 1;
+    //             while(!q.empty()){
+    //                 int v = q.front();
+    //                 q.pop();
+    //                 auto& l = out_left[v];    
+    //                 // set<int> tmp;
+    //                 for(auto& node : l){
+    //                     if(node.isVirtual){
+    //                         for(auto& r : input[node.node_id].right){
+    //                             if(!visited[r]){
+    //                                 visited[r] = 1;
+    //                                 q.push(r);
+    //                             }
+    //                         }
+    //                     }
+    //                     else{
+    //                         visited[node.node_id] = 1;
+    //                         q.push(node.node_id);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("condensed bfs time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
+
+    // pagerank
+    // start = clock();
+    // count = 0;
+    // // printf("%d %d \n", LM, out_left.size());
+    // vector<int> deg(LM, 0);
+    // vector<int> flag(out_left.size(), 0);
+    // for(auto& l : out_left){
+    //     vector<int> t;
+    //     // set<int> tmp;
+    //     for(auto& node : l){
+    //         if(node.isVirtual){
+    //             for(auto& r : input[node.node_id].right){
+    //                 // t.insert(r);
+    //                 if(!flag[r]){
+    //                     t.push_back(r);
+    //                     flag[r] = 1;
+    //                 }
+                    
+    //                 // count++;
+    //             }
+    //         }
+    //         else{
+    //             if(!flag[node.node_id]){
+    //                 t.push_back(node.node_id);
+    //                 flag[node.node_id] = 1;
+    //             }
+    //             // t.push_back(node.node_id);
+    //             // count++;
+    //         }
+    //     }
+    //     // 
+    //     for(auto& x : t){
+    //         flag[x] = 0;
+    //     }
+    //     deg[count++] = t.size();
+    // }
+
+    // // printf("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
+
+    // float* prev = new float[LM];
+    // float* curr = new float[LM];
+    // float damp = 0.85f;
+    // iterations = 1;
+    // assert(LM == out_left.size());
+    // while(iterations--){
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         curr[i] = (1.0 - damp) / LM;
+    //         float t = 0.0f;
+    //         vector<int> visited(out_left.size(), 0);
+    //         // printf("1\n");
+    //         auto& l = out_left[i];    
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 assert(node.node_id < input.size());
+    //                 for(auto& r : input[node.node_id].right){
+    //                     // printf("2\n");
+    //                     assert(r < out_left.size());
+    //                     assert(r >= 0);
+    //                     if(!visited[r]){
+    //                         assert(r < LM);
+    //                         visited[r] = 1;
+    //                         t +=  prev[r] / deg[r];
+    //                     }
+    //                 }
+    //             }
+    //             else{
+    //                 assert(node.node_id < out_left.size());
+    //                 assert(node.node_id >= 0);
+    //                 if(!visited[node.node_id]){
+    //                     assert(node.node_id < LM);
+    //                     visited[node.node_id] = 1;
+    //                     // q.push(node.node_id);
+    //                     t += prev[node.node_id] / deg[node.node_id];
+    //                 }
+    //             }
+    //             // printf("3\n");
+    //         }
+    //         curr[i] += damp * t;
+    //     }
+    //     swap(prev, curr);
+    // }
+    // end = clock();
+    // printf("condensed pagerank time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC)));
 
     set<pair<int,int>> redundant_edges;
-
     VVON tmp(out_left);
     // shuffle the vertices.
     srand(unsigned(time(0)));
@@ -822,129 +898,179 @@ void GraphDeduplicator::greedyDedup(){
     }   
     
     // count the degree.
-    start = clock();
-    iterations = 1000;
-    count = 0;
-    while(iterations--){
-        for(auto& l : out_left){
-            for(auto& node : l){
-                if(node.isVirtual){
-                    for(auto& r : input[node.node_id].right){
-                        count++;
-                    }
-                }
-                else{
-                    count++;
-                }
-            }
-        }
-    }
-    end = clock();
-    printf("greedy Deduplication s degree time cost:%fs  count : %d \n", (double)(end - start) / CLOCKS_PER_SEC, count);
+    // start = clock();
+    // iterations =10;
+    // count = 0;
+    // while(iterations--){
+    //     for(auto& l : out_left){
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     count++;
+    //                 }
+    //             }
+    //             else{
+    //                 count++;
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("greedy Deduplication s degree time cost:%fs  count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);
 
-    // k-core for non-duplicate graphs.
-    start = clock();
-    k = 4;
-    iterations = 1000;
-    while(iterations--){
-        vector<int> k_list;
-        vector<int> visited(out_left.size(), 0);
-        vector<int> deg(out_left.size(), 0);
-        for(int i = 0, s = out_left.size();i < s;i++){
-            auto& l = out_left[i];    
-            // count the degree.
-            for(auto& node : l){
-                if(node.isVirtual){
-                    for(auto& r : input[node.node_id].right){
-                        count++;
-                    }
-                }
-                else{
-                    count++;
-                }
-            }
-            deg[i] = count;
-            if(count < k){
-                k_list.push_back(i);
-            }
-        }   
+    // // k-core for non-duplicate graphs.
+    // start = clock();
+    // k = 4;
+    // iterations =10;
+    // while(iterations--){
+    //     vector<int> k_list;
+    //     vector<int> visited(out_left.size(), 0);
+    //     vector<int> deg(out_left.size(), 0);
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         auto& l = out_left[i];    
+    //         // count the degree.
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     count++;
+    //                 }
+    //             }
+    //             else{
+    //                 count++;
+    //             }
+    //         }
+    //         deg[i] = count;
+    //         if(count < k){
+    //             k_list.push_back(i);
+    //         }
+    //     }   
         
-        while(!k_list.empty()){
-            int head = k_list.back();
-            k_list.pop_back();
-            // degree of head < k
-            // remove this vertex and update its adjacent neighbors.
-            visited[head] = 1;
-            auto& l = out_left[head];    
-            // count the degree.
+    //     while(!k_list.empty()){
+    //         int head = k_list.back();
+    //         k_list.pop_back();
+    //         // degree of head < k
+    //         // remove this vertex and update its adjacent neighbors.
+    //         visited[head] = 1;
+    //         auto& l = out_left[head];    
+    //         // count the degree.
             
-            for(auto& node : l){
-                if(node.isVirtual){
-                    for(auto& r : input[node.node_id].right){
-                        // count++;
-                        deg[r]--;
-                        if(!visited[r] && deg[r] < k){
-                            k_list.push_back(r);
-                        }
-                    }
-                }
-                else{
-                    int r = node.node_id;
-                    deg[r]--;
-                    if(!visited[r] && deg[r] < k){
-                        k_list.push_back(r);
-                    }
-                }
-            }
-        }
-    }
-    end = clock();
-    printf("greedy Deduplications k-core time cost:%fs \n", (double)(end - start) / CLOCKS_PER_SEC);
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     // count++;
+    //                     deg[r]--;
+    //                     if(!visited[r] && deg[r] < k){
+    //                         k_list.push_back(r);
+    //                     }
+    //                 }
+    //             }
+    //             else{
+    //                 int r = node.node_id;
+    //                 deg[r]--;
+    //                 if(!visited[r] && deg[r] < k){
+    //                     k_list.push_back(r);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("greedy Deduplications k-core time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
 
-    // bfs
-    start = clock();
-    iterations = 1000;
-    while(iterations--){
-        vector<int> visited(out_left.size(), 0);
-        // vector<int> deg(out_left.size(), 0);
-        for(int i = 0, s = out_left.size();i < s;i++){
-            if(!visited[i]){
-                // 
-                queue<int> q;
-                q.push(i);
-                visited[i] = 1;
-                while(!q.empty()){
-                    int v = q.front();
-                    q.pop();
-                    // printf("a\n");
-                    auto& l = out_left[v];    
-                    // set<int> tmp;
-                    for(auto& node : l){
-                        if(node.isVirtual){
-                            for(auto& r : input[node.node_id].right){
-                                if(!visited[r]){
-                                    visited[r] = 1;
-                                    q.push(r);
-                                }
-                            }
-                        }
-                        else{
-                            if(!visited[node.node_id]){
-                                visited[node.node_id] = 1;
-                                q.push(node.node_id);
-                            }
+    // // bfs
+    // start = clock();
+    // iterations = 1;
+    // while(iterations--){
+    //     vector<int> visited(out_left.size(), 0);
+    //     // vector<int> deg(out_left.size(), 0);
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         if(!visited[i]){
+    //             // 
+    //             queue<int> q;
+    //             q.push(i);
+    //             visited[i] = 1;
+    //             while(!q.empty()){
+    //                 int v = q.front();
+    //                 q.pop();
+    //                 // printf("a\n");
+    //                 auto& l = out_left[v];    
+    //                 // set<int> tmp;
+    //                 for(auto& node : l){
+    //                     if(node.isVirtual){
+    //                         for(auto& r : input[node.node_id].right){
+    //                             if(!visited[r]){
+    //                                 visited[r] = 1;
+    //                                 q.push(r);
+    //                             }
+    //                         }
+    //                     }
+    //                     else{
+    //                         if(!visited[node.node_id]){
+    //                             visited[node.node_id] = 1;
+    //                             q.push(node.node_id);
+    //                         }
                             
-                        }
-                    }
-                }
-            }
-        }
-    }
-    end = clock();
-    printf("greedy deduplication bfs time cost:%fs \n", (double)(end - start) / CLOCKS_PER_SEC);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("greedy deduplication bfs time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
 
-    // pagerank
+    // // pagerank
+    // start = clock();
+    // count = 0;
+    // // vector<int> deg(LM, 0);
+    
+    // for(auto& l : out_left){
+    //     vector<int> t;
+    //     // set<int> tmp;
+    //     for(auto& node : l){
+    //         if(node.isVirtual){
+    //             for(auto& r : input[node.node_id].right){
+    //                 // t.insert(r);
+    //                 t.push_back(r);
+    //                 flag[r] = 1;
+    //             }
+    //         }
+    //         else{
+    //             t.push_back(node.node_id);
+    //             // t.push_back(node.node_id);
+    //             // count++;
+    //         }
+    //     }
+    //     deg[count++] = t.size();
+    // }
 
+    // // float* prev = new float[LM];
+    // // float* curr = new float[LM];
+    // damp = 0.85f;
+    // iterations = 1;
+    // while(iterations--){
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         curr[i] = (1 - damp) / LM;
+    //         float t = 0.0f;
+    //         auto& l = out_left[i];    
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     t +=  prev[r] / deg[r];
+    //                 }
+    //             }
+    //             else{
+    //                 t += prev[node.node_id] / deg[node.node_id];
+    //             }
+    //         }
+    //     }
+    //     swap(prev, curr);
+    // }
+    // end = clock();
+    // printf("condensed pagerank time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
+
+    // delete[] prev;
+    // delete[] curr;
     input = input_copy;
     // clean up 
     for(auto& n : input){
@@ -961,12 +1087,13 @@ void GraphDeduplicator::bfsTest(int iter){
 }
 
 
-int GraphDeduplicator::count_expand_edges(){
+void GraphDeduplicator::count_expand_edges(){
     vector<vector<int>> tmp_left;
     tmp_left.resize(LM + 1, {});
     for(int s = input.size(), i = 0;i < s;i++){
         NODE& node = input[i];
         for(auto& Lrn : node.left){
+            assert(Lrn <= LM);
             tmp_left[Lrn].push_back(i);
         }
     }
@@ -1014,10 +1141,10 @@ void GraphDeduplicator::remove_edge_and_restore_connections(int target, bool lef
 }
 
 void GraphDeduplicator::build_revertedIDX_for_realNodes(){
-    for (int i = 0; i <= LM; ++i) {
+    for (int i = 0; i < LM; ++i) {
         out_left.push_back({});
     }
-    for (int i = 0; i <= RM; ++i) {
+    for (int i = 0; i < RM; ++i) {
         out_right.push_back({});
     }
     for(int s = input.size(), i = 0;i < s;i++){
@@ -1149,11 +1276,197 @@ void GraphDeduplicator::deduplicateBySearch(const vector<int>& mvc, const vector
         } 
     }
 
-    delete[] tag;
-    
     report_result();
 
-    print_graph();
+    // 因为在进行countdegree的时候不想每次重新求一次差集，所以直接求一次。但之后要记得复原。
+    vector<NODE> input_copy = input;
+    for(auto& vn : input){
+        set<int> left_res = set_minus(vn.left, vn.left_del), 
+                right_res = set_minus(vn.right, vn.right_del);
+        vn.left = left_res;
+        vn.right = right_res;
+    }   
+    vector<int> deg(LM, 0);
+    vector<int> flag(out_left.size(), 0);
+    
+    // count the degree.
+    // clock_t start = clock();
+    // int iterations =10;
+    // int count = 0;
+    // while(iterations--){
+    //     for(auto& l : out_left){
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     count++;
+    //                 }
+    //             }
+    //             else{
+    //                 count++;
+    //             }
+    //         }
+    //     }
+    // }
+    // clock_t end = clock();
+    // printf("greedy Deduplication s degree time cost:%fs  count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);
+
+    // // k-core for non-duplicate graphs.
+    // start = clock();
+    // int k = 4;
+    // iterations =10;
+    // while(iterations--){
+    //     vector<int> k_list;
+    //     vector<int> visited(out_left.size(), 0);
+    //     vector<int> deg(out_left.size(), 0);
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         auto& l = out_left[i];    
+    //         // count the degree.
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     count++;
+    //                 }
+    //             }
+    //             else{
+    //                 count++;
+    //             }
+    //         }
+    //         deg[i] = count;
+    //         if(count < k){
+    //             k_list.push_back(i);
+    //         }
+    //     }   
+        
+    //     while(!k_list.empty()){
+    //         int head = k_list.back();
+    //         k_list.pop_back();
+    //         // degree of head < k
+    //         // remove this vertex and update its adjacent neighbors.
+    //         visited[head] = 1;
+    //         auto& l = out_left[head];    
+    //         // count the degree.
+            
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     // count++;
+    //                     deg[r]--;
+    //                     if(!visited[r] && deg[r] < k){
+    //                         k_list.push_back(r);
+    //                     }
+    //                 }
+    //             }
+    //             else{
+    //                 int r = node.node_id;
+    //                 deg[r]--;
+    //                 if(!visited[r] && deg[r] < k){
+    //                     k_list.push_back(r);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("greedy Deduplications k-core time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
+
+    // // bfs
+    // start = clock();
+    // iterations =10;
+    // while(iterations--){
+    //     vector<int> visited(out_left.size(), 0);
+    //     // vector<int> deg(out_left.size(), 0);
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         if(!visited[i]){
+    //             // 
+    //             queue<int> q;
+    //             q.push(i);
+    //             visited[i] = 1;
+    //             while(!q.empty()){
+    //                 int v = q.front();
+    //                 q.pop();
+    //                 // printf("a\n");
+    //                 auto& l = out_left[v];    
+    //                 // set<int> tmp;
+    //                 for(auto& node : l){
+    //                     if(node.isVirtual){
+    //                         for(auto& r : input[node.node_id].right){
+    //                             if(!visited[r]){
+    //                                 visited[r] = 1;
+    //                                 q.push(r);
+    //                             }
+    //                         }
+    //                     }
+    //                     else{
+    //                         if(!visited[node.node_id]){
+    //                             visited[node.node_id] = 1;
+    //                             q.push(node.node_id);
+    //                         }
+                            
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // end = clock();
+    // printf("greedy deduplication bfs time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
+
+    // // pagerank
+    // start = clock();
+    // count = 0;
+    // // vector<int> deg(LM, 0);
+    
+    // for(auto& l : out_left){
+    //     vector<int> t;
+    //     // set<int> tmp;
+    //     for(auto& node : l){
+    //         if(node.isVirtual){
+    //             for(auto& r : input[node.node_id].right){
+    //                 // t.insert(r);
+    //                 t.push_back(r);
+    //                 flag[r] = 1;
+    //             }
+    //         }
+    //         else{
+    //             t.push_back(node.node_id);
+    //             // t.push_back(node.node_id);
+    //             // count++;
+    //         }
+    //     }
+    //     deg[count++] = t.size();
+    // }
+
+    // float* prev = new float[LM];
+    // float* curr = new float[LM];
+    // float damp = 0.85f;
+    // iterations = 1;
+    // while(iterations--){
+    //     for(int i = 0, s = out_left.size();i < s;i++){
+    //         curr[i] = (1 - damp) / LM;
+    //         float t = 0.0f;
+    //         auto& l = out_left[i];    
+    //         for(auto& node : l){
+    //             if(node.isVirtual){
+    //                 for(auto& r : input[node.node_id].right){
+    //                     t +=  prev[r] / deg[r];
+    //                 }
+    //             }
+    //             else{
+    //                 t += prev[node.node_id] / deg[node.node_id];
+    //             }
+    //         }
+    //     }
+    //     swap(prev, curr);
+    // }
+    // end = clock();
+    // printf("condensed pagerank time cost:%fs \n", ((double)(end - start) / (CLOCKS_PER_SEC )));
+    // delete[] tag;
+    // delete[] prev;
+    // delete[] curr;
+
+    input = input_copy;
+
+    // print_graph();
 }
 
 // advanced search, combine set cover and search method.
@@ -1480,11 +1793,9 @@ void GraphDeduplicator::deduplicateByWeightedSetCover(){
             if(IsEdge[e]){
                 c++;
                 if(edges[e].isVirtual == -1){
-                    // printf("%d %dL\n",input[i].input_node_id, edges[e].node_id);
                     left_nb++;
                 }
                 else if(edges[e].isVirtual == 1){
-                    // printf("%d %dR\n",input[i].input_node_id, edges[e].node_id);
                     right_nb++;
                 }
             }
@@ -1494,62 +1805,52 @@ void GraphDeduplicator::deduplicateByWeightedSetCover(){
     c += redundant_edges.size();
     relations += redundant_edges.size();
 
-    // print the direct edges.
-    // for(auto& p : redundant_edges){
-    //     auto& pp = p.first;
-    //     int type = p.second;
-    //     if(type == -1){
-    //         printf("L %d -> %d\n",pp.first - input.size(), pp.second);
-    //     }
-    //     else if(type == 1){
-    //         printf("R %d -> %d\n",pp.first - input.size() - LM, pp.second);
-    //     }
-    // }
-
     printf("Number of edges after deduplication: %d\n", c);
     printf("Greedy Weighted Set cover Compression ratio: %f%\n", c * 100.0 / this->exp_size);
     printf("relations: %d\n", relations);
 
     // build list for direct edges.
-    // vector<int> left[LM], right[RM];
-    // for(auto& pp : redundant_edges){
-    //     int type = pp.second;
-    //     int u = pp.first.first, v = pp.first.second;
-    //     if(type == -1){
-    //         u -= input.size();
-    //         assert(u < LM);
-    //         left[u].push_back(v);
-    //     }
-    //     else if(type == 1){
-    //         u -= (input.size() + LM);
-    //         assert(u < RM);
-    //         right[u].push_back(v);
-    //     }
-    // }
+    vector<int> left[LM], right[RM];
+    for(auto& pp : redundant_edges){
+        int type = pp.second;
+        int u = pp.first.first, v = pp.first.second;
+        if(type == -1){
+            u -= input.size();
+            assert(u < LM);
+            left[u].push_back(v);
+        }
+        else if(type == 1){
+            u -= (input.size() + LM);
+            assert(u < RM);
+            right[u].push_back(v);
+        }
+    }
 
-    // vector<int> left_neighbor_size(input.size() + 1, 0);
-    // vector<int> right_neighbor_size(input.size() + 1, 0);
     
-    // // count the neighbor size of each mid node.
-    // for(int i = 0;i < input.size();i++){
-    //     int l = 0, r = 0;
-    //     for(int e = Vnode[i]; e != -1;e = next[e]){
-    //         if(IsEdge[e]){
-    //             int type = edges[e].isVirtual;
-    //             if(type == -1){
-    //                 l++;
-    //             }
-    //             else{
-    //                 r++;
-    //             }
-    //         }
-    //     }
-    //     left_neighbor_size[i] = l;
-    //     right_neighbor_size[i] = r;
-    // }
+    vector<int> left_neighbor_size(input.size() + 1, 0);
+    vector<int> right_neighbor_size(input.size() + 1, 0);
+    
+    // count the neighbor size of each mid node.
+    for(int i = 0;i < input.size();i++){
+        int l = 0, r = 0;
+        for(int e = Vnode[i]; e != -1;e = next[e]){
+            if(IsEdge[e]){
+                int type = edges[e].isVirtual;
+                if(type == -1){
+                    l++;
+                }
+                else{
+                    r++;
+                }
+            }
+        }
+        left_neighbor_size[i] = l;
+        right_neighbor_size[i] = r;
+    }
 
+    // // count degree
     // clock_t start = clock();
-    // int iterations = 1000;
+    // int iterations =10;
     // int count = 0;
     // while(iterations--){
     //     for(int i = input.size(), s = input.size() + LM;i < s;i++){
@@ -1568,12 +1869,12 @@ void GraphDeduplicator::deduplicateByWeightedSetCover(){
     //     }
     // }
     // clock_t end = clock();
-    // printf("Weighted set cover count degree time:%f s count : %d \n", (double)(end - start) / CLOCKS_PER_SEC, count);
+    // printf("Weighted set cover count degree time:%f s count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);
 
     // // k-core
     // start = clock();
     // int k = 4;
-    // iterations = 1000;
+    // iterations =10;
     // while(iterations--){
     //     vector<int> deg(LM, 0);
     //     vector<int> k_list;
@@ -1628,11 +1929,11 @@ void GraphDeduplicator::deduplicateByWeightedSetCover(){
     //     // }
     // }
     // end = clock();
-    // printf("Weighted set cover k-core time:%f s count : %d \n", (double)(end - start) / CLOCKS_PER_SEC, count);
+    // printf("Weighted set cover k-core time:%f s count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);
 
-    // // bfs
+    // // // bfs
     // start = clock();
-    // iterations = 1000;
+    // iterations =10;
     // count = 0;
     // while(iterations--){
     //     vector<int> visited(LM, 0);
@@ -1656,55 +1957,75 @@ void GraphDeduplicator::deduplicateByWeightedSetCover(){
     //                         }
     //                     }        
     //                 }
+    //                 for(auto& n : left[head]){
+    //                     if(!visited[n]){
+    //                         q.push(n);
+    //                         visited[n] = 1;
+    //                     }
+    //                 }
     //             }
     //         }
     //     }
     // }
     // end = clock();
-    // printf("Weighted set cover bfs time:%f s count : %d \n", (double)(end - start) / CLOCKS_PER_SEC, count);
+    // printf("Weighted set cover bfs time:%f s count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);
 
-    
-    
-    // set<pair<pair<int, int>, int> > negative_edges;
-    // // negativeEdgeEnhance();
-    // tag = right_tag;
-    // for(int i = 0;i < input.size();i++){
-    //     for(int e = Vnode[i]; e != -1;e = next[e]){
+
+    // // pagerank
+    // // count the degree for each vertex.
+    // start = clock();
+    // // int iterations =10;
+    // count = 0;
+    // vector<int> deg(LM, 0);
+    // for(int i = input.size(), s = input.size() + LM;i < s;i++){
+    //     count = 0;
+    //     for(int e = Vnode[i];e != -1; e = next[e]){
     //         if(IsEdge[e]){
-    //             int type = edges[e].isVirtual;
-    //             if(type == -1){
-    //                 int dst = edges[e].node_id;
-    //                 bool ok = false;
-    //                 assert(dst < LM);
-    //                 for(auto& r : left[dst]){
-    //                     assert(r <  RM);
-    //                     tag[r]++;
-    //                     // if(left_neighbor_size[i] + 1 < 2 * tag[r]){
-    //                     //     ok = true;
-    //                     // } 
-    //                 }  
-    //                 for(auto& r : left[dst]){
-    //                     if(left_neighbor_size[i] + 1 < 2 * tag[r]){
-    //                         insert_edge(i, r, false);
-    //                         // add the negative edges.
-    //                         for(int ee = Vnode[i]; ee != -1;ee = next[ee]){
-    //                             if(IsEdge[ee]){
-    //                                 int type = edges[ee].isVirtual;
-    //                                 if(type == 1 && tag[edges[ee].node_id] == 0){
-    //                                     negative_edges.insert(make_pair(make_pair(dst, edges[ee].node_id),-1));
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //                 for(auto& r : left[dst]){
-    //                     tag[r] = 0;
+    //             for(int ee = Vnode[edges[e].node_id]; ee!= -1; ee = next[ee]){
+    //                 if(IsEdge[ee] && edges[ee].isVirtual == 1){
+    //                     count++;
     //                 }
     //             }
     //         }
     //     }
+    //     deg[i - s] = count;
     // }
-    // printf("negative edge size: %d\n", negative_edges.size());
+    // for(int i = 0;i < LM;i++){
+    //     deg[i] += left[i].size();
+    // }
+
+    // // perform iterations.
+    // float* prev = new float[LM];
+    // float* curr = new float[LM];
+    // float damp = 0.85f;
+    // // start = clock();
+    // iterations = 1;
+    // count = 0;
+    // while(iterations--){
+    //     for(int i = 0;i < LM;i++){
+    //         curr[i] = (1.0f - damp) / LM;
+    //         float t = 0.0f;
+    //         for(int e = Vnode[i+input.size()];e != -1; e = next[e]){
+    //             if(IsEdge[e]){
+    //                 for(int ee = Vnode[edges[e].node_id]; ee!= -1; ee = next[ee]){
+    //                     if(IsEdge[ee] && edges[ee].isVirtual == 1){
+    //                         t += prev[edges[ee].node_id] / deg[edges[ee].node_id];
+    //                     }
+    //                 }
+    //             }        
+    //         }
+    //         for(auto& n : left[i]){
+    //             t += prev[n] / deg[n];
+    //         }
+    //         curr[i] += t * damp;
+    //     }
+    //     swap(prev, curr);
+    // }
+    
+    // end = clock();
+    // printf("Weighted set cover pagerank time:%f s count : %d \n", ((double)(end - start) / (CLOCKS_PER_SEC )), count);    
+    // delete[] prev;
+    // delete[] curr;
 
     delete[] cost;
     delete[] IsEdge;
@@ -1719,6 +2040,353 @@ void GraphDeduplicator::deduplicateByWeightedSetCover(){
 // advanced search, combine set cover and search method.
 void GraphDeduplicator::deduplicateWithNegaEdge(){
     printf("****************Negative Edge enhancement****************\n");
+
+    ui v_num = input.size() + RM + LM;
+    Vnode = new ui[v_num];
+    memset(Vnode, -1, sizeof(ui) * v_num);
+    // construct the threepart graph
+    for(ui s = input.size(), i = 0;i < s;i++){
+        NODE& vn = input[i];
+        for(auto& ln : vn.left){
+            insert_edge(i, ln, 1);
+        }
+        for(auto& rn : vn.right){
+            insert_edge(i, rn, 0);
+        }
+    }
+    
+    set<pair<pair<int, int>, int>> redundant_edges;
+    set<pair<pair<int, int>, int>> negative_edges;
+    // record weight for each edge.
+    ui* counter = new ui[edges.size()];
+    memset(counter, 0, sizeof(ui) * edges.size());
+
+    ui* left_tag = new ui[LM];
+    ui* right_tag = new ui[RM];
+    memset(left_tag, 0, sizeof(ui) * LM);
+    memset(right_tag, 0, sizeof(ui) * RM);
+
+    for(int i = 0, s = input.size();i < s;i++){
+        NODE& node_i = input[i];
+        for(int j = i + 1;j < s;j++){
+            NODE& node_j = input[j];
+            if (*(node_j.left.begin()) > *(--node_i.left.end())) {
+                break;
+            }
+            
+            // detection for conflict can be improved.
+            set<int> node_i_j_left = findCommonNeighbour(node_i.left, node_j.left);
+            if (node_i_j_left.size() == 0) continue;
+            set<int> node_i_j_right = findCommonNeighbour(node_i.right, node_j.right);
+            if (node_i_j_right.size() == 0) continue;
+
+            // count
+            for(auto& l : node_i_j_left){
+                left_tag[l] = 1;
+            }
+            for(auto& r : node_i_j_right){
+                right_tag[r] = 1;
+            }
+
+            // traverse the adjacent list of vertex i and j.
+            for(int e = Vnode[i]; e != -1; e = next[e]){
+                if((edges[e].isVirtual == -1 && left_tag[edges[e].node_id] == 1 )){
+                    counter[e] += node_i_j_right.size() ;
+                } 
+                else if(edges[e].isVirtual == 1 &&right_tag[edges[e].node_id] == 1 ){
+                    counter[e] += node_i_j_left.size() ;
+                }
+            }
+            
+            for(int e = Vnode[j]; e != -1; e = next[e]){
+                if((edges[e].isVirtual == -1 && left_tag[edges[e].node_id] == 1 )){
+                    counter[e] += node_i_j_right.size() ;
+                } 
+                else if(edges[e].isVirtual == 1 &&right_tag[edges[e].node_id] == 1 ){
+                    counter[e] += node_i_j_left.size() ;
+                }
+            }
+
+            // recover the state
+            for(auto& l : node_i_j_left){
+                left_tag[l] = 0;
+            }
+            for(auto& r : node_i_j_right){
+                right_tag[r] = 0;
+            }
+        }
+    }
+
+    ui conflicts = 0;
+    for(int i = 0;i <edges.size();i++){
+        conflicts += counter[i];
+    }
+    conflicts /= 4;
+    printf("there are %d conflicts.\n", conflicts);
+    
+    ui* src = new ui[edges.size()];
+    for(int i = 0, s = input.size() + RM + LM;i < s;i++){
+        for(int e = Vnode[i];e != -1;e = next[e]){
+            src[e] = i;
+        }
+    }
+
+    ui max_freq = 0;
+    for(int i = 0;i < edges.size();i++){
+        max_freq = max(max_freq, counter[i]);
+    }
+    // delete the edge with highest score until no conflicts exist.
+    
+    ui* Order = new ui[max_freq + 1];
+    memset(Order, -1, sizeof(ui) * (max_freq+1));
+    ui* Onext = new ui[edges.size()];
+    bool* IsEdge = new bool[edges.size()];
+    memset(IsEdge, -1, sizeof(bool) * edges.size());
+
+    for(int i = 0;i < input.size();i++){
+        for(int e = Vnode[i]; e != -1; e = next[e]){
+            Onext[e] = Order[counter[e]];
+            Order[counter[e]] = e;
+        }
+    }
+    
+    int delete_edges = 0;
+    ui times = 0;
+    ui* tag = nullptr;
+    // resolve the conflicts until empty.
+    for(int i = max_freq;i > 0;){
+        while(i > 0 && Order[i] == -1){ i--;}
+        if(i <= 0) break;
+        int j = -1;
+        // printf("i:%d \n", i);
+        for(j = Order[i]; j != -1;){
+            int tmp = Onext[j];
+            if(IsEdge[j]) {
+                if(counter[j] < i) {
+                    Onext[j] = Order[counter[j]];
+                    Order[counter[j]] = j;
+                }
+                else{
+                    IsEdge[j] = 0;
+                    // if(times <= 0) exit(1);
+                    // printf("there are %d conflicts, %d left after this round.\n",conflicts, conflicts - counter[j]);
+                    conflicts -= counter[j];
+                    times--;
+                    counter[j] = 0;
+                    int s = src[j],  d = edges[j].node_id, type = edges[j].isVirtual;
+                    
+                    delete_edges++;
+                    if(type == -1){    // d on the left side
+                        // printf("delete (%d, %d)L\n", s, d);
+                        d += input.size();
+                        tag = right_tag;
+                    }
+                    else if(type == 1){     //d on the right side
+                        // printf("delete (%d, %d)R\n", s, d);
+                        d += input.size() + LM;
+                        tag = left_tag;
+                    }
+
+                    for(int e = Vnode[d]; e != -1;e = next[e]){
+                        if(edges[e].isVirtual == 0 && edges[e].node_id == s){
+                            IsEdge[e] = 0;
+                            break;
+                        }
+                    }
+
+                    for(int e = Vnode[s]; e != -1 ;e = next[e]){
+                        if(edges[e].isVirtual == -type && IsEdge[e]){
+                            tag[edges[e].node_id] = 1;
+                        }
+                    }
+                    for(int e = Vnode[d]; e != -1;e = next[e]){
+                        // check if this edge is valid.
+                        // if it is virtual node.
+                        if(IsEdge[e] && edges[e].isVirtual == 0 && edges[e].node_id != s){
+                            int c = 0, t = -1;
+                            for(int ve = Vnode[edges[e].node_id]; ve != -1;ve = next[ve]){
+                                if(edges[ve].isVirtual == -type && IsEdge[ve] && tag[edges[ve].node_id] >= 1){
+                                    counter[ve]--;
+                                    tag[edges[ve].node_id]++;
+                                    c++;
+                                }
+                                else if (edges[ve].isVirtual == type){
+                                    if(type == -1 && (d - input.size() == edges[ve].node_id)){
+                                        t = ve;
+                                    }
+                                    else if(type == 1 && (d - input.size() - LM == edges[ve].node_id)){
+                                        t = ve;
+                                    }
+                                }
+                            }
+                            counter[t] -= c;
+                        }
+                    }
+                    int c1 = 0, c2 = 0;
+                    for(int e = Vnode[s]; e != -1;e = next[e]){
+                        if(edges[e].isVirtual == -type){
+                            if(IsEdge[e]){
+                                // add the broken connections.
+                                if(tag[edges[e].node_id] == 1){
+                                    c1++;
+                                    // redundant_edges.insert(make_pair(make_pair(d, edges[e].node_id), type));
+                                }
+                                else if(tag[edges[e].node_id] > 1){
+                                    c2++;
+                                }
+                                counter[e] = counter[e] - tag[edges[e].node_id] + 1;
+                                // tag[edges[e].node_id] = 0;
+                            }
+                            else{
+                                c2++;
+                            }
+                        }
+                    }
+                    for(int e = Vnode[s]; e != -1;e = next[e]){
+                        if(edges[e].isVirtual == -type){
+                            if(IsEdge[e]){
+                                counter[e] = counter[e] - tag[edges[e].node_id] + 1;
+                                if(tag[edges[e].node_id] == 1){
+                                    // c1++;
+                                    if(c2 + 1 >= c1){
+                                        redundant_edges.insert(make_pair(make_pair(d, edges[e].node_id), type));
+                                    }
+                                }
+                                else if(tag[edges[e].node_id] > 1 && c2 + 1< c1){
+                                    negative_edges.insert(make_pair(make_pair(j, edges[e].node_id), type));
+                                }
+                                
+                                tag[edges[e].node_id] = 0;
+                            }
+                            // add the broken connections.
+                            else{
+                                if(c2 + 1 < c1){
+                                    negative_edges.insert(make_pair(make_pair(j, edges[e].node_id), type));
+                                }
+                            }
+                        }
+                    }
+                    Order[i] = tmp;
+                    break;
+                }
+            }
+            j = tmp;
+            // delete this edge and update the priority for each influenced edge.
+        }
+        if(j == -1) Order[i]= -1;
+    }
+
+    printf("delete edges:%d\n", delete_edges);
+    // postprocess the degree one cases.
+    for(int i = 0;i < input.size();i++){
+        int left_nb = 0, right_nb = 0, l = 0, r = 0;
+        for(int e = Vnode[i]; e != -1;e = next[e]){
+            if(IsEdge[e]){
+                if(edges[e].isVirtual == -1){
+                    left_nb++;
+                    l = edges[e].node_id;
+                }
+                else if(edges[e].isVirtual == 1){
+                    right_nb++;
+                    r = edges[e].node_id;
+                }
+            }
+        }
+        if(left_nb <= 1 ||  right_nb <= 1){
+            // collapse the virtual i and add the direct edges.
+            if(left_nb == 1){
+                for(int e = Vnode[i]; e != -1;e = next[e]){
+                    if(IsEdge[e] && edges[e].isVirtual == 1){
+                        redundant_edges.insert(make_pair(make_pair(l + input.size(), edges[e].node_id), -1));
+                    }
+                }   
+            }
+            else if(right_nb == 1){
+                for(int e = Vnode[i]; e != -1;e = next[e]){
+                    if(IsEdge[e] && edges[e].isVirtual == -1){
+                        redundant_edges.insert(make_pair(make_pair(r + input.size() + LM, edges[e].node_id), 1));
+                    }
+                }
+            }
+            for(int e = Vnode[i]; e != -1;e = next[e]){
+                IsEdge[e] = 0;
+            } 
+        }
+    }
+
+    int c = 0;
+    ui relations = 0;
+    for(int i = 0;i < input.size();i++){
+        int left_nb = 0, right_nb = 0;
+        for(int e = Vnode[i]; e != -1;e = next[e]){
+            if(IsEdge[e]){
+                c++;
+                if(edges[e].isVirtual == -1){
+                    left_nb++;
+                }
+                else if(edges[e].isVirtual == 1){
+                    right_nb++;
+                }
+            }
+        }
+        relations += left_nb * right_nb;
+    }
+    c += redundant_edges.size() + negative_edges.size();
+    relations += redundant_edges.size();
+    
+    vector<vector<int> > Eadj(edges.size());
+    for(auto& pp : negative_edges){
+        int e = pp.first.first, v = pp.first.second, type = pp.second;
+        // int s = src[e], d = edges[e].node_id; 
+        Eadj[e].push_back(v);
+    }
+
+    int t = 0; 
+    for(int i = 0, s = Eadj.size();i < s;i++){
+        if(Eadj[i].size() == 0) continue;
+        // t++;
+        auto& l = Eadj[i];
+        int u = src[i], v = edges[i].node_id, dire = edges[i].isVirtual; 
+        assert(u < input.size());
+        if(dire == -1){
+            tag = right_tag;
+        }
+        else if(dire == 1){
+            tag = left_tag;
+        }
+        for(auto& n : l){
+            tag[n] = 1;
+        }
+        // 
+        for(int e = Vnode[u]; e != -1;e = next[e]){
+            if(edges[e].isVirtual == -dire && !tag[edges[e].node_id]){
+                relations++;
+            } 
+        }
+
+        for(auto& n : l){ 
+            tag[n] = 0;
+        }
+    }
+    
+    c += t;
+
+    printf("Number of edges after deduplication: %d\n", c);
+    printf("Greedy Weighted Set cover Compression ratio: %f%\n", c * 100.0 / this->exp_size);
+    printf("relations: %d\n", relations);
+
+    // delete[] cost;
+    delete[] IsEdge;
+    delete[] src;
+    delete[] left_tag;
+    delete[] right_tag;
+    delete[] Vnode;
+    delete[] counter;
+}
+
+// advanced search, combine set cover and search method.
+void GraphDeduplicator::WeightedDeduplicateWithNegaEdge(){
+    printf("****************Weighted Negative Edge enhancement****************\n");
 
     ui v_num = input.size() + RM + LM;
     Vnode = new ui[v_num];
@@ -2087,11 +2755,9 @@ void GraphDeduplicator::deduplicateWithNegaEdge(){
             if(IsEdge[e]){
                 c++;
                 if(edges[e].isVirtual == -1){
-                    // printf("%d %dL\n",input[i].input_node_id, edges[e].node_id);
                     left_nb++;
                 }
                 else if(edges[e].isVirtual == 1){
-                    // printf("%d %dR\n",in    put[i].input_node_id, edges[e].node_id);
                     right_nb++;
                 }
             }
@@ -2108,10 +2774,10 @@ void GraphDeduplicator::deduplicateWithNegaEdge(){
         Eadj[e].push_back(v);
     }
 
-    int t = 0;
+    int t = 0; 
     for(int i = 0, s = Eadj.size();i < s;i++){
         if(Eadj[i].size() == 0) continue;
-        t++;
+        // t++;
         auto& l = Eadj[i];
         int u = src[i], v = edges[i].node_id, dire = edges[i].isVirtual; 
         assert(u < input.size());
@@ -2128,10 +2794,10 @@ void GraphDeduplicator::deduplicateWithNegaEdge(){
         for(int e = Vnode[u]; e != -1;e = next[e]){
             if(edges[e].isVirtual == -dire && !tag[edges[e].node_id]){
                 relations++;
-            }
+            } 
         }
 
-        for(auto& n : l){
+        for(auto& n : l){ 
             tag[n] = 0;
         }
     }
@@ -2225,7 +2891,7 @@ vector<int> GraphDeduplicator::get_weight() {
     return weight;
 }
 
-pair<VVON, VVON> GraphDeduplicator::get_result() {
-    return make_pair(out_left, out_right);
-}
+// pair<VVON, VVON> GraphDeduplicator::get_result() {
+//     return make_pair(out_left, out_right);
+// }
 
