@@ -1,9 +1,13 @@
 #pragma once
 #include "Bi2Tri.h"
 
-bool compar(const pair<int,int>& a, const pair<int,int>& b){
+bool degree_compar(const pair<int,int>& a, const pair<int,int>& b){
     if(a.first < b.first) return true;
     return false;
+}
+
+bool subgraph_size_comp(){
+
 }
 
 // power-law distribution.
@@ -46,30 +50,34 @@ Bi2Tri::Bi2Tri(float alpha, int n, int m){
     printf("left nodes: %ld, right nodes: %ld, edges: %d\n", left.size(), right.size(), e);
 }
 
-Bi2Tri::Bi2Tri(int n, int m, float prob){
-    // int n = n, m;
-    left.resize(n);
-    right.resize(m);
+// Bi2Tri::Bi2Tri(int n, int m, float prob){
+//     // int n = n, m;
+//     left.resize(n);
+//     right.resize(m);
+//     L_Deg.resize(n);
+//     R_Deg.resize(m);
+//     L_valid.resize(n);
+//     R_valid.resize(m);
 
-    vector<int> L;
+//     vector<int> L;
     
-    for(int i = 0;i < m;i++){
-        L.push_back(i);
-    }
+//     for(int i = 0;i < m;i++){
+//         L.push_back(i);
+//     }
 
-    // int e = 0;
-    srand(unsigned(time(0)));
-    for(int i = 0;i < n;i++){
-        random_shuffle(L.begin(), L.end(), Rand);
-        for(int j = 0;j < (int)(prob * m);j++){
-            left[i].push_back(L[j]);
-            right[L[j]].push_back(i);
-            e++;
-        }
-    }
-    printf("bigraph reading done......\n");
-    printf("left nodes: %ld, right nodes: %ld, edges: %d\n", left.size(), right.size(), e);
-}
+//     // int e = 0;
+//     srand(unsigned(time(0)));
+//     for(int i = 0;i < n;i++){
+//         random_shuffle(L.begin(), L.end(), Rand);
+//         for(int j = 0;j < (int)(prob * m);j++){
+//             left[i].push_back(L[j]);
+//             right[L[j]].push_back(i);
+//             e++;
+//         }
+//     }
+//     printf("bigraph reading done......\n");
+//     printf("left nodes: %ld, right nodes: %ld, edges: %d\n", left.size(), right.size(), e);
+// }
 
 
 Bi2Tri::Bi2Tri(string filename){
@@ -78,10 +86,17 @@ Bi2Tri::Bi2Tri(string filename){
     if (ifs) {
         string line;
         getline(ifs, line);
-        left.resize(atoi(line.c_str()));
+        int n = atoi(line.c_str());
+        left.resize(n);
         getline(ifs, line);
-        right.resize(atoi(line.c_str()));
-        printf("1\n");
+        int m = atoi(line.c_str());
+        right.resize(m);
+        this->ln = n;
+        this->rn = m;
+        L_Deg = new int[n];
+        R_Deg = new int[m];
+        L_valid = new int[n];
+        R_valid = new int[m];
         while (getline(ifs, line)) {
             if (line[0] == '#' || line[0] == '%') {
                 continue;
@@ -104,11 +119,28 @@ Bi2Tri::Bi2Tri(string filename){
     }
     ifs.close();
     this->e = e;
-    printf("bigraph reading done......\n");
-    printf("left nodes: %ld, right nodes: %ld, edges: %d\n", left.size(), right.size(), e);
+
+    for(int i = 0, s = left.size();i < s;i++){
+        L_Deg[i] = left[i].size();
+        max_degree = max(max_degree, L_Deg[i]);
+        L_valid[i] = 1;
+    }
+
+    for(int i = 0, s = right.size();i < s;i++){
+        R_Deg[i] = right[i].size();
+        max_degree = max(max_degree, R_Deg[i]);
+        R_valid[i] = 1;
+    }
+
+    printf("reading done......\n");
+    printf("|L|: %ld, |R|: %ld, |E|: %d\n", left.size(), right.size(), e);
 }
 
-void Bi2Tri::reduce(){
+void Bi2Tri::subgraph_reduce(){
+
+}
+
+void Bi2Tri::degree_one_reduce(){
     vector<int> L_degree_one, R_degree_one;
     for(int i = 0, s = left.size();i < s;i++){
         if(left[i].size() == 1){
@@ -116,24 +148,158 @@ void Bi2Tri::reduce(){
         }
     }
     
-    for(int i = 0, s = left.size();i < s;i++){
+    for(int i = 0, s = right.size();i < s;i++){
         if(right[i].size() == 1){
             R_degree_one.push_back(i);
         }
     }
-
     while(!L_degree_one.empty() || !R_degree_one.empty()){
         while (!L_degree_one.empty()){
+            int u = L_degree_one.back();
+            L_degree_one.pop_back();
+            // assert(u < left.size());
+            if(L_Deg[u] == 1){
+                L_valid[u] = 0;
+                for(auto r : left[u]) if(R_valid[r]){
+                    // assert(r < right.size());
+                    R_Deg[r]--;
+                    if(R_Deg[r] == 1){
+                        R_degree_one.push_back(r);
+                    }
+                }
+            }
             
-
         }
-        while (!R_degree_one.empty()){
+        while(!R_degree_one.empty()){
+            int u = R_degree_one.back();
+            R_degree_one.pop_back();
+            // if(u >= right.size()){
+            //     // cerr << u << " " << right.size() << endl;
+            //     // printf("%d %d", u, right.size());
+            // }
+            // assert(u < right.size());
+            if(R_Deg[u] == 1){
+                R_valid[u] = 0;
+                for(auto l : right[u]) if (L_valid[l]){
+                    // assert(l < left.size());
+                    L_Deg[l]--;
+                    if(L_Deg[l] == 1){
+                        L_degree_one.push_back(l);
+                    }
+                }
+            }
             
         }
     }
+    printf("Degree one reduce done...\n");
 }
 
-vector<NODE> Bi2Tri::convert(int redundancy){
+void Bi2Tri::upperbound_reduce(){
+    // vector<int> L_counter, R_counter;
+    ui* L_counter = new ui[left.size()];
+    ui* R_counter = new ui[right.size()];
+    char* L_skip = new char[left.size()];
+    char* R_skip = new char[right.size()];
+    memset(L_counter, 0, sizeof(ui) * left.size());
+    memset(R_counter, 0, sizeof(ui) * right.size());
+
+    memset(L_skip, 0, sizeof(char) * left.size());
+    memset(R_skip, 0, sizeof(char) * right.size());
+
+    for(int l = 0, s = left.size();l < s; l++){
+        if(L_valid[l] == 1 && L_skip[l] == 0){
+            char ok = 1;
+            vector<int> N;
+            for(int i = 0, rs = left[l].size();i < rs;i++){
+                int r = left[l][i];
+                if(R_valid[r] == 0 || R_skip[r] == 1) continue;
+                int two_counter = 0;
+                for(int j = 0, lls = right[r].size();j < lls;j++){
+                    int ll = right[r][j];
+                    if(ll != l && L_valid[ll] == 1){
+                        L_counter[ll]++;
+                        if(L_counter[ll] == 1){
+                            N.push_back(ll);
+                        }
+                        if(L_counter[ll] == 2){
+                            two_counter++;
+                            if(two_counter > 1){
+                                ok = 0;
+                                L_skip[ll] = 1;
+                                R_skip[r] = 1;
+                            }
+                        }
+                        if(L_counter[ll] == 3){
+                            ok = 0;
+                            // tag the one-hop vertices.
+                            L_skip[ll] = 1;
+                        }
+                    }
+                }
+            }
+            if(ok == 1){
+                L_valid[l] = 0;
+            }
+            for(auto& x : N){
+                L_counter[x] = 0;
+            }
+        }
+    }
+
+    for(int l = 0, s = right.size();l < s; l++){
+        if(R_valid[l] == 1 && R_skip[l] == 0){
+            char ok = 1;
+            vector<int> N;
+            for(int r = 0, rs = right[l].size();r < rs;r++){
+                int k = right[l][r];
+                if(L_valid[r] == 0) continue;
+                int two_counter = 0;
+                for(int ll = 0, lls = left[k].size();ll < lls;ll++){
+                    int llk = left[k][ll];
+                    if(llk != l && R_valid[llk] == 1){
+                        R_counter[llk]++;
+                        if(R_counter[llk] == 1){
+                            N.push_back(llk);
+                        }
+                        if(R_counter[llk] == 2){
+                            two_counter++;
+                            if(two_counter > 1){
+                                ok = 0;
+                                R_skip[llk] = 1;
+                            }
+                        }
+                        if(R_counter[llk] == 3){
+                            ok = 0;
+                            // tag the one-hop vertices.
+                            R_skip[llk] = 1;
+                        }
+                    }
+                }
+            }
+            if(ok == 1){
+                R_valid[l] = 0;
+            }
+            for(auto& x : N){
+                R_counter[x] = 0;
+            }
+        }
+    }
+    delete[] L_skip;
+    delete[] R_skip;
+    delete[] L_counter;
+    delete[] R_counter;
+    printf("two-hop reduce done...\n");
+}
+
+void Bi2Tri::reduce(){
+    degree_one_reduce();
+    summary();
+    upperbound_reduce();
+    summary();
+    printf("Bigraph reduce done...\n");
+}
+
+vector<NODE> Bi2Tri::duplicate_allowed_compress(){
     int* tagL = new int[left.size()];
     memset(tagL, 0, sizeof(int) * left.size());
 
@@ -142,21 +308,25 @@ vector<NODE> Bi2Tri::convert(int redundancy){
 
     ui*  ver_intersec = new ui[left.size()];
     memset(ver_intersec, 0, sizeof(ui) * left.size());
-
     vector<vector<int> > isEdge(left);
     
     int mid_count = 0;
-    // int midsize = 0;
     vector<NODE> input;
-    
     int c = 0;
-    
+      
     vector<pair<int,int> > L;
     for(int i = 0;i < left.size();i++){
-        L.push_back(make_pair(left[i].size(), i));
+        if(L_valid[i] == 1){
+            L.push_back(make_pair(left[i].size(), i));
+        }
     }
 
-    sort(L.begin(), L.end(), compar);
+    /**
+     * @brief try different vertex ordering.
+     *  1. degree-degeneracy order
+     *  2. subgraph-degeneracy order
+     */
+    sort(L.begin(), L.end(), degree_compar);
 
     int* visited = new int[left.size()];
     memset(visited, 0, sizeof(ui) * left.size());
@@ -164,39 +334,46 @@ vector<NODE> Bi2Tri::convert(int redundancy){
     int* jump = new int[left.size()];
     memset(jump, 0, sizeof(ui) * left.size());
 
+    int* start = new int[left.size()];
+    
+    int* local_degree = new int[left.size()];
+
+    int* local_dest = new int[right.size()];
+
     for(int q = 0, s = L.size();q < s;q++){ 
         int i = L[q].second;
         // if(jump[i] == 1){
         //     continue;
         // } 
-        // extract the two-hop neighbors for each vertex.
-        // printf("%d th vertex is processed...\n", i);
         ui degs = 0;
         vector<int> one_hop, two_hop;
         tagL[i] = 1;
+        one_hop.resize(max_degree);
+        two_hop.resize(max_degree * max_degree);
         for(int j = 0;j < left[i].size();j++) {
             int r = left[i][j];
             tagR[r] = 1;
+            one_hop.push_back(r);
             for(int k = 0;k < right[r].size();k++) {
                 int l = right[r][k];
                 if(l != i){
                     tagL[l]++;
-                    if(tagL[l] == 2){
+                    if(tagL[l] == 2){      // // two_hop store the vertices with degree >= 2;
                         two_hop.push_back(l);
-                        // visited[l] = 1;
                     }
                 }
             }
         }
-        // printf("%d\n", two_hop.size());
 
+        
+        // apply the reductions for the extracted subgraph.
+        subgraph_reduce();
+        
         ui vs = left[i].size();
         priority_queue<pair<int, int>> pq;
         float threshold = 0;
-
-        int delta_max = -1; // neg-infinity
-        // calculate the difference for each vertex
-
+        int delta_max = -1; // neg-infinity       
+        // for each candidate, calculate the profit.
         for(auto& x : two_hop){
             int d_count = 0, v_count = 0;
             for(int j = 0;j < left[x].size();j++) {
@@ -211,6 +388,7 @@ vector<NODE> Bi2Tri::convert(int redundancy){
             pq.push(make_pair(ver_intersec[x], x));   
         }
 
+        // choose the vertex with highest score.
         vector<int> Ls;
         Ls.push_back(i);
         ui Rs = 0;
@@ -239,7 +417,6 @@ vector<NODE> Bi2Tri::convert(int redundancy){
             }
             times++;
             Rs = temp;
-            // printf("Rs:%d\n", Rs);
             
             vector<int> update; 
             for(int j = 0;j < left[i].size();j++) {
@@ -268,48 +445,40 @@ vector<NODE> Bi2Tri::convert(int redundancy){
                 visited[xl] = 0;
             }
 
-
             // add a new virtual node controlled by the parameter *redundancy*.
-            if(redundancy > 1){
-                vector<int> Rsol;
-                for(int j = 0;j < left[i].size();j++){
-                    int r = left[i][j];
-                    if(tagR[r] == times){
-                        Rsol.push_back(r);  
-                    }
+            vector<int> Rsol;
+            for(int j = 0;j < left[i].size();j++){
+                int r = left[i][j];
+                if(tagR[r] == times){
+                    Rsol.push_back(r);  
                 }
-                
-                if(Rsol.size() > 1 && Ls.size() > 1){
-                    set<int> left_(Ls.begin(), Ls.end());
-                    set<int> right_(Rsol.begin(), Rsol.end());
-                    // printf("%d %d\n",right_.size() , left_.size());
-                    input.push_back(NODE(mid_count++, left_, right_));
-                }
-
-                redundancy--;
             }
-
+            
+            if(Rsol.size() > 1 && Ls.size() > 1){
+                set<int> left_(Ls.begin(), Ls.end());
+                set<int> right_(Rsol.begin(), Rsol.end());
+                // printf("%d %d\n",right_.size() , left_.size());
+                input.push_back(NODE(mid_count++, left_, right_));
+            }
             threshold = Ls.size() * Rs * 1.0 / (Ls.size() + 1);
         }
 
-        // cerr << "3" << endl;
         
         for(auto& x : two_hop){
             tagL[x] = 0;
-            // visited[x] = 0;
         }
         tagL[i] = 0;
-        // visited[i] = 0;
         vector<int> Rsol, Ridx;
         
+        // pick out common neighbors of vertices in Ls.
         for(int j = 0;j < left[i].size();j++){
             int r = left[i][j];
             if(tagR[r] == times){
                 Rsol.push_back(r);  
             }
         }
-
         
+        // generate the virtual node.
         if(Rsol.size() > 1 && Ls.size() > 1){
             for(auto& ls : Ls){
                 jump[ls] = 1;
@@ -329,6 +498,9 @@ vector<NODE> Bi2Tri::convert(int redundancy){
     delete[] tagR;
     delete[] ver_intersec;
     delete[] visited;
+    delete[] start;
+    delete[] local_degree;
+    delete[] local_dest;
 
     printf("%d mid nodes are generated...\n", mid_count);
 
@@ -343,12 +515,10 @@ vector<NODE> Bi2Tri::convert(int redundancy){
                 T.insert(make_pair(l,r));
             }
         }
-    }
-    
+    }    
     printf("Trigrahph size:%d Expanded: %d direct edges:%d\n", ec, T.size(), e - T.size());
     // assert(e -T.size() == c);
-    printf("comrepssion ratio: %f %\n", (e - T.size() + ec) * 100.0 / this->e);
-    
+    printf("comrepssion ratio: %f %\n", (e - T.size() + ec) * 100.0 / this->e);   
     return input;
 }
 
@@ -532,10 +702,8 @@ vector<NODE> Bi2Tri::convert(int redundancy){
 //     return input;
 // }
 
-
-
 // compress the graph directly
-void Bi2Tri::compress(){
+void Bi2Tri::duplicate_free_compress(){
     int* tagL = new int[left.size()];
     memset(tagL, 0, sizeof(int) * left.size());
 
@@ -865,12 +1033,32 @@ void Bi2Tri::compress(){
 
 
 void Bi2Tri::summary(){
-    // printf("left:%d right:%d\n", left.size(), right.size());
-    // for(auto& r: left){
-    //     for(auto& e : r){
-    //         printf("%d ", e);
-    //     }
-    //     printf("\n");
+    // give the summary of current graph. 
+    int L = 0, R = 0;
+    for(int i = 0;i < ln;i++){
+        L += L_valid[i];
+    }
+
+    for(int i = 0;i < rn;i++){
+        R += R_valid[i];
+    }
+
+    // for(auto l : L_valid){
+    //     L += l;
     // }
+    // for(auto r : R_valid){
+    //     R += r;
+    // }
+    int e = 0;
+    for(int i = 0,s = left.size();i < s;i++){
+        if(L_valid[i] == 1){
+            for(auto n : left[i]){
+                if(R_valid[n] == 1){
+                    e++;
+                }
+            }
+        }
+    }
+    printf("|L| : %d, |R| : %d, |E| : %d \n", L, R, e);
 }
 

@@ -27,6 +27,8 @@ class GraphDeduplicator {
         GraphDeduplicator(string filename);
         GraphDeduplicator(vector<NODE> input);
 
+        void deduplicate();
+        
         vector<vector<int>> get_neighbour();
         vector<int> get_weight();
         pair<VVON, VVON> get_result();

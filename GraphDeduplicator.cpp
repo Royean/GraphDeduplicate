@@ -104,8 +104,7 @@ GraphDeduplicator::GraphDeduplicator(string filename) {
     ifs.close();
     for (int i = 0; i < N; ++i) {
         neighbour.push_back({});
-    }
-    
+    }  
 }
 
 inline set<int> GraphDeduplicator::findCommonNeighbour(const set<int>& a, const set<int>& b) {
@@ -140,6 +139,9 @@ void GraphDeduplicator::insert_edge(int u, int v, bool left){
 
 
 typedef unsigned int ui;
+void GraphDeduplicator::deduplicate(){
+
+}
 
 void GraphDeduplicator::deduplicateBySetCover(){
     printf("****************Set Cover****************\n");
