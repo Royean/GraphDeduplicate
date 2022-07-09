@@ -7,6 +7,9 @@
 #include <string>
 using namespace std;
 
+
+// #define BRUTE
+
 class GraphDeduplicator {
     
     public:
@@ -24,6 +27,22 @@ class GraphDeduplicator {
         VVON out_left;
         VVON out_right;
 
+        
+        // store the degree 
+        vector<int> left_deg;
+        vector<int> right_deg;
+        vector<int> virtual_left_deg;
+        vector<int> virtual_right_deg;
+        // status: inactive
+        vector<int> left_status;
+        vector<int> virtual_status;
+        vector<int> right_status;
+        // left-> virtual neighborhood
+        vector<vector<int>> left_adj;
+        vector<vector<int>> right_adj;
+        vector<vector<int>> virtual_left_adj;
+        vector<vector<int>> virtual_right_adj;
+
         GraphDeduplicator(string filename);
         GraphDeduplicator(vector<NODE> input);
 
@@ -34,6 +53,11 @@ class GraphDeduplicator {
         pair<VVON, VVON> get_result();
         
         set<int> findCommonNeighbour(const set<int>& a, const set<int>& b);
+
+        void buildReductionGraph();
+        void degreeOneReduction();
+        void twoHopReduction();
+
         void build_conflict_graph();
         void construct_graphTopology();
         void assign_vertex_weight(int k);
@@ -42,6 +66,7 @@ class GraphDeduplicator {
         void greedyDedup();
         void dedup1();
         
+        void describe();
         void deduplicateBySearch(const vector<int>& mvc, const vector<int>& mis);
         void remove_edge_and_restore_connections(int target, bool left, set<int>& removed_edges, set<int>& common, set<pair<int,int>>& redundant_edges);
         void build_revertedIDX_for_realNodes();
@@ -60,7 +85,7 @@ class GraphDeduplicator {
 
         // vector<int> getNeigbor(int k, method algo);
         void bfsTest(int iter);
-        void k_core(int iter);
+        void k_core(int k);
 
         // void duplicateTest(int iterations);
         void degreeTest(int iter);

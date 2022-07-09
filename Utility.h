@@ -61,11 +61,13 @@ struct NODE {
     set<int> right;
 	set<int> left_del;
 	set<int> right_del;
+	set<int> right_retained;
+	set<int> left_retained;
     vector<NODE_COMMON_NEIGHBOUR> common_neighbour;
     NODE(int id) {
 		this->input_node_id = id;
 	}
-    NODE(int id, set<int> left, set<int> right){
+    NODE(int id, set<int>&& left, set<int>&& right){
 		this->input_node_id = id;
 		this->left = left;
 		this->right = right;
@@ -91,6 +93,18 @@ struct OUT_NODE {
 };
 
 
+class Bucket_queue{
+	int* bucket;
+	int* next;
+	int current_priority;
+	Bucket_queue(int max_priority, int num_of_elements);
+	
+	void push();
+	int pop();
+	bool is_empty();
+	void build_queue(vector<pair<int,int>>& data);
+	void adjust(int new_priority, int element_id);
+};
 
 typedef vector<vector<OUT_NODE>> VVON;
 

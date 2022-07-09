@@ -10,45 +10,45 @@ bool subgraph_size_comp(){
 
 }
 
-// power-law distribution.
-Bi2Tri::Bi2Tri(float alpha, int n, int m){
-    left.resize(n);
-    right.resize(m);
+// // power-law distribution.
+// Bi2Tri::Bi2Tri(float alpha, int n, int m){
+//     left.resize(n);
+//     right.resize(m);
 
-    vector<float> deg;
-    deg.resize(m,1.0);
+//     vector<float> deg;
+//     deg.resize(m,1.0);
 
-    float sum = m;
+//     float sum = m;
 
-    vector<int> L;
-    for(int i = 0;i < m;i++){
-        L.push_back(i);
-        // left[0].push_back(i);
-    }
+//     vector<int> L;
+//     for(int i = 0;i < m;i++){
+//         L.push_back(i);
+//         // left[0].push_back(i);
+//     }
 
-    // int e = 0;
-    srand(unsigned(time(0)));
-    for(int i = 0;i < n;i++){
-        for(int j = 0;j < m;j++){
-            float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-            if(r < deg[j] * 1.0 / sum){
-                left[i].push_back(L[j]);
-                right[L[j]].push_back(i);
-                e++;
-                deg[j] += 1.0 * alpha;
-                sum += 1.0 * alpha;
-            }
-        } 
-        // random_shuffle(L.begin(), L.end(), Rand);
-        // for(int j = 0;j < (int)( * m);j++){
-            // left[i].push_back(L[j]);
-            // right[L[j]].push_back(i);
-            // e++;
-        // }
-    }
-    printf("bigraph reading done......\n");
-    printf("left nodes: %ld, right nodes: %ld, edges: %d\n", left.size(), right.size(), e);
-}
+//     // int e = 0;
+//     srand(unsigned(time(0)));
+//     for(int i = 0;i < n;i++){
+//         for(int j = 0;j < m;j++){
+//             float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+//             if(r < deg[j] * 1.0 / sum){
+//                 left[i].push_back(L[j]);
+//                 right[L[j]].push_back(i);
+//                 e++;
+//                 deg[j] += 1.0 * alpha;
+//                 sum += 1.0 * alpha;
+//             }
+//         } 
+//         // random_shuffle(L.begin(), L.end(), Rand);
+//         // for(int j = 0;j < (int)( * m);j++){
+//             // left[i].push_back(L[j]);
+//             // right[L[j]].push_back(i);
+//             // e++;
+//         // }
+//     }
+//     printf("bigraph reading done......\n");
+//     printf("left nodes: %ld, right nodes: %ld, edges: %d\n", left.size(), right.size(), e);
+// }
 
 // Bi2Tri::Bi2Tri(int n, int m, float prob){
 //     // int n = n, m;
@@ -97,6 +97,7 @@ Bi2Tri::Bi2Tri(string filename){
         R_Deg = new int[m];
         L_valid = new int[n];
         R_valid = new int[m];
+        // int uid = 0;
         while (getline(ifs, line)) {
             if (line[0] == '#' || line[0] == '%') {
                 continue;
@@ -110,9 +111,10 @@ Bi2Tri::Bi2Tri(string filename){
                 assert(k < content.size());
                 int temp = atoi(content[k++].c_str());
                 assert(l < left.size());
-                left[l].push_back(temp);
+                left[l].push_back(Edge(temp, e));
                 assert(temp < right.size());
-                right[temp].push_back(l);
+                right[temp].push_back(Edge(l, e));
+                undirected_edge_state.push_back(State());
                 e++;
             }
         }
@@ -136,8 +138,19 @@ Bi2Tri::Bi2Tri(string filename){
     printf("|L|: %ld, |R|: %ld, |E|: %d\n", left.size(), right.size(), e);
 }
 
-void Bi2Tri::subgraph_reduce(){
-
+Bi2Tri::~Bi2Tri(){
+    if(L_Deg != nullptr){
+        delete[] L_Deg;
+    }
+    if(R_Deg != nullptr){
+        delete[] R_Deg;
+    }
+    if(L_valid != nullptr){
+        delete[] L_valid;
+    }
+    if(R_valid != nullptr){
+        delete[] R_valid;
+    }
 }
 
 void Bi2Tri::degree_one_reduce(){
@@ -160,11 +173,11 @@ void Bi2Tri::degree_one_reduce(){
             // assert(u < left.size());
             if(L_Deg[u] == 1){
                 L_valid[u] = 0;
-                for(auto r : left[u]) if(R_valid[r]){
+                for(auto r : left[u]) if(R_valid[r.dst]){
                     // assert(r < right.size());
-                    R_Deg[r]--;
-                    if(R_Deg[r] == 1){
-                        R_degree_one.push_back(r);
+                    R_Deg[r.dst]--;
+                    if(R_Deg[r.dst] == 1){
+                        R_degree_one.push_back(r.dst);
                     }
                 }
             }
@@ -180,15 +193,14 @@ void Bi2Tri::degree_one_reduce(){
             // assert(u < right.size());
             if(R_Deg[u] == 1){
                 R_valid[u] = 0;
-                for(auto l : right[u]) if (L_valid[l]){
+                for(auto l : right[u]) if (L_valid[l.dst]){
                     // assert(l < left.size());
-                    L_Deg[l]--;
-                    if(L_Deg[l] == 1){
-                        L_degree_one.push_back(l);
+                    L_Deg[l.dst]--;
+                    if(L_Deg[l.dst] == 1){
+                        L_degree_one.push_back(l.dst);
                     }
                 }
-            }
-            
+            }   
         }
     }
     printf("Degree one reduce done...\n");
@@ -196,12 +208,13 @@ void Bi2Tri::degree_one_reduce(){
 
 void Bi2Tri::upperbound_reduce(){
     // vector<int> L_counter, R_counter;
-    ui* L_counter = new ui[left.size()];
-    ui* R_counter = new ui[right.size()];
+    int* L_counter = new int[left.size()];
+    int* R_counter = new int[right.size()];
     char* L_skip = new char[left.size()];
     char* R_skip = new char[right.size()];
-    memset(L_counter, 0, sizeof(ui) * left.size());
-    memset(R_counter, 0, sizeof(ui) * right.size());
+    
+    memset(L_counter, 0, sizeof(int) * left.size());
+    memset(R_counter, 0, sizeof(int) * right.size());
 
     memset(L_skip, 0, sizeof(char) * left.size());
     memset(R_skip, 0, sizeof(char) * right.size());
@@ -211,11 +224,11 @@ void Bi2Tri::upperbound_reduce(){
             char ok = 1;
             vector<int> N;
             for(int i = 0, rs = left[l].size();i < rs;i++){
-                int r = left[l][i];
-                if(R_valid[r] == 0 || R_skip[r] == 1) continue;
+                int r = left[l][i].dst;
+                if(R_valid[r] == 0) continue;
                 int two_counter = 0;
                 for(int j = 0, lls = right[r].size();j < lls;j++){
-                    int ll = right[r][j];
+                    int ll = right[r][j].dst;
                     if(ll != l && L_valid[ll] == 1){
                         L_counter[ll]++;
                         if(L_counter[ll] == 1){
@@ -239,6 +252,8 @@ void Bi2Tri::upperbound_reduce(){
             }
             if(ok == 1){
                 L_valid[l] = 0;
+                for(auto& r : left[l]) if(R_valid[r.dst] == 1){
+                    R_Deg[r.dst]--;              }
             }
             for(auto& x : N){
                 L_counter[x] = 0;
@@ -251,11 +266,11 @@ void Bi2Tri::upperbound_reduce(){
             char ok = 1;
             vector<int> N;
             for(int r = 0, rs = right[l].size();r < rs;r++){
-                int k = right[l][r];
+                int k = right[l][r].dst;
                 if(L_valid[r] == 0) continue;
                 int two_counter = 0;
                 for(int ll = 0, lls = left[k].size();ll < lls;ll++){
-                    int llk = left[k][ll];
+                    int llk = left[k][ll].dst;
                     if(llk != l && R_valid[llk] == 1){
                         R_counter[llk]++;
                         if(R_counter[llk] == 1){
@@ -278,6 +293,9 @@ void Bi2Tri::upperbound_reduce(){
             }
             if(ok == 1){
                 R_valid[l] = 0;
+                for(auto& ll : right[l]) if(L_valid[ll.dst] == 1){
+                    L_Deg[ll.dst]--;
+                }
             }
             for(auto& x : N){
                 R_counter[x] = 0;
@@ -293,12 +311,234 @@ void Bi2Tri::upperbound_reduce(){
 
 void Bi2Tri::reduce(){
     degree_one_reduce();
-    summary();
+    // summary();
     upperbound_reduce();
     summary();
     printf("Bigraph reduce done...\n");
 }
 
+void Bi2Tri::buildCPGraph(){
+
+}
+
+// vector<NODE> Bi2Tri::convert(int redundancy){
+//     int* tagL = new int[left.size()];
+//     memset(tagL, 0, sizeof(int) * left.size());
+
+//     int* tagR = new int[right.size()];
+//     memset(tagR, 0, sizeof(int) * right.size());
+
+//     ui*  ver_intersec = new ui[left.size()];
+//     memset(ver_intersec, 0, sizeof(ui) * left.size());
+
+//     vector<vector<int> > isEdge(left);
+    
+//     int mid_count = 0;
+//     // int midsize = 0;
+//     vector<NODE> input;
+    
+//     int c = 0;
+    
+//     vector<pair<int,int> > L;
+//     for(int i = 0;i < left.size();i++){
+//         L.push_back(make_pair(left[i].size(), i));
+//     }
+
+//     sort(L.begin(), L.end(), compar);
+
+//     int* visited = new int[left.size()];
+//     memset(visited, 0, sizeof(ui) * left.size());
+
+//     int* jump = new int[left.size()];
+//     memset(jump, 0, sizeof(ui) * left.size());
+
+//     for(int q = 0, s = L.size();q < s;q++){ 
+//         int i = L[q].second;
+//         // if(jump[i] == 1){
+//         //     continue;
+//         // } 
+//         // extract the two-hop neighbors for each vertex.
+//         // printf("%d th vertex is processed...\n", i);
+//         ui degs = 0;
+//         vector<int> one_hop, two_hop;
+//         tagL[i] = 1;
+//         for(int j = 0;j < left[i].size();j++) {
+//             int r = left[i][j];
+//             tagR[r] = 1;
+//             for(int k = 0;k < right[r].size();k++) {
+//                 int l = right[r][k];
+//                 if(l != i){
+//                     tagL[l]++;
+//                     if(tagL[l] == 2){
+//                         two_hop.push_back(l);
+//                         // visited[l] = 1;
+//                     }
+//                 }
+//             }
+//         }
+//         // printf("%d\n", two_hop.size());
+
+//         ui vs = left[i].size();
+//         priority_queue<pair<int, int>> pq;
+//         float threshold = 0;
+
+//         int delta_max = -1; // neg-infinity
+//         // calculate the difference for each vertex
+
+//         for(auto& x : two_hop){
+//             int d_count = 0, v_count = 0;
+//             for(int j = 0;j < left[x].size();j++) {
+//             // for(auto& xr : left[x]) {
+//                 int xr = left[x][j];
+//                 if(tagR[xr] == 1){
+//                     v_count++;
+//                 }
+//             }
+//             ver_intersec[x] = v_count;
+//             delta_max = max(delta_max, v_count);
+//             pq.push(make_pair(ver_intersec[x], x));   
+//         }
+
+//         vector<int> Ls;
+//         Ls.push_back(i);
+//         ui Rs = 0;
+//         int times = 1;
+//         while(!pq.empty()){
+//             // printf("%d\n", pq.size());
+//              // update the thresho ld.
+//             pair<int, int>  p = pq.top();
+//             pq.pop();
+//             if(p.first <= (int)floor(threshold)){
+//                 break;
+//             }
+//             if(p.first != ver_intersec[p.second]){
+//                 continue;
+//             }
+//             Ls.push_back(p.second);
+//             tagL[p.second] = 0;
+//             int temp = 0;
+//             for(int j = 0;j < left[p.second].size();j++){
+//             // for(auto& x : left[p.second]){ 
+//                 int x = left[p.second][j];
+//                 if(tagR[x] == times){
+//                     tagR[x]++;   
+//                     temp++;
+//                 }
+//             }
+//             times++;
+//             Rs = temp;
+//             // printf("Rs:%d\n", Rs);
+            
+//             vector<int> update; 
+//             for(int j = 0;j < left[i].size();j++) {
+//             // for(auto& x : left[i]){
+//                 int x = left[i][j];
+//                 if(tagR[x] == times - 1){
+//                     // update the v_diff and d_diff
+//                     for(auto& xl : right[x]) if(xl != i){
+//                         ver_intersec[xl]--;
+//                         // deg_intersec[xl] -= right[x].size();
+//                         if(visited[xl] == 0){
+//                             update.push_back(xl);
+//                             visited[xl] = 1;
+//                         }
+//                         // float s = ver_intersec[xl];
+//                         // pq.push(make_pair(s, xl));
+//                         // v_pq.push(make_pair(ver_intersec[xl], xl));
+//                     }
+//                 }
+//             }
+
+//             for(auto& xl : update){
+//                 int s = ver_intersec[xl];
+//                 pq.push(make_pair(s, xl));
+//                 // v_pq.push(make_pair(ver_intersec[xl], xl));
+//                 visited[xl] = 0;
+//             }
+
+
+//             // add a new virtual node controlled by the parameter *redundancy*.
+//             if(redundancy > 1){
+//                 vector<int> Rsol;
+//                 for(int j = 0;j < left[i].size();j++){
+//                     int r = left[i][j];
+//                     if(tagR[r] == times){
+//                         Rsol.push_back(r);  
+//                     }
+//                 }
+                
+//                 if(Rsol.size() > 1 && Ls.size() > 1){
+//                     set<int> left_(Ls.begin(), Ls.end());
+//                     set<int> right_(Rsol.begin(), Rsol.end());
+//                     // printf("%d %d\n",right_.size() , left_.size());
+//                     input.push_back(NODE(mid_count++, left_, right_));
+//                 }
+
+//                 redundancy--;
+//             }
+
+//             threshold = Ls.size() * Rs * 1.0 / (Ls.size() + 1);
+//         }
+
+//         // cerr << "3" << endl;
+        
+//         for(auto& x : two_hop){
+//             tagL[x] = 0;
+//             // visited[x] = 0;
+//         }
+//         tagL[i] = 0;
+//         // visited[i] = 0;
+//         vector<int> Rsol, Ridx;
+        
+//         for(int j = 0;j < left[i].size();j++){
+//             int r = left[i][j];
+//             if(tagR[r] == times){
+//                 Rsol.push_back(r);  
+//             }
+//         }
+
+        
+//         if(Rsol.size() > 1 && Ls.size() > 1){
+//             for(auto& ls : Ls){
+//                 jump[ls] = 1;
+//             }
+//             set<int> left_(Ls.begin(), Ls.end());
+//             set<int> right_(Rsol.begin(), Rsol.end());
+//             // printf("%d %d\n",right_.size() , left_.size());
+//             input.push_back(NODE(mid_count++, left_, right_));
+//         }
+
+//         for(auto& r : left[i]){
+//             tagR[r] = 0;
+//         }
+//     }
+
+//     delete[] tagL;
+//     delete[] tagR;
+//     delete[] ver_intersec;
+//     delete[] visited;
+
+//     printf("%d mid nodes are generated...\n", mid_count);
+
+//     set<pair<int,int>> T;
+//     int ec = 0;
+//     int k = 0;
+//     for(auto& node : input){
+//         k += node.left.size() * node.right.size();
+//         ec += node.left.size() + node.right.size();
+//         for(auto& l : node.left){
+//             for(auto& r : node.right){
+//                 T.insert(make_pair(l,r));
+//             }
+//         }
+//     }
+    
+//     printf("Trigrahph size:%d Expanded: %d direct edges:%d\n", ec, T.size(), e - T.size());
+//     // assert(e -T.size() == c);
+//     printf("comrepssion ratio: %f %\n", (e - T.size() + ec) * 100.0 / this->e);
+    
+//     return input;
+// }
 vector<NODE> Bi2Tri::duplicate_allowed_compress(){
     int* tagL = new int[left.size()];
     memset(tagL, 0, sizeof(int) * left.size());
@@ -306,20 +546,50 @@ vector<NODE> Bi2Tri::duplicate_allowed_compress(){
     int* tagR = new int[right.size()];
     memset(tagR, 0, sizeof(int) * right.size());
 
-    ui*  ver_intersec = new ui[left.size()];
-    memset(ver_intersec, 0, sizeof(ui) * left.size());
-    vector<vector<int> > isEdge(left);
+    int* L_remain = new int[left.size()];
+    memset(L_remain, 0, sizeof(int) * left.size());
+
+    int* L_counter = new int[left.size()];
+    memset(L_counter, 0, sizeof(int) * left.size());
     
+    for(int l = 0, s = left.size();l < s; l++){
+        if(L_valid[l] == 1){
+            vector<int> N;
+            for(int i = 0, rs = left[l].size();i < rs;i++){
+                int r = left[l][i].dst;
+                if(R_valid[r] == 0) continue;
+                int two_counter = 0;
+                for(int j = 0, lls = right[r].size();j < lls;j++){
+                    int ll = right[r][j].dst;
+                    if(ll != l && L_valid[ll] == 1 && ll > l){
+                        L_counter[ll]++;
+                        if(L_counter[ll] == 1){
+                            N.push_back(ll);
+                        }
+                        if(L_counter[ll] == 3){
+                            L_remain[l]++;
+                            L_remain[ll]++;
+                        }
+                    }
+                }
+            }
+            for(auto& x : N){
+                L_counter[x] = 0;
+            }
+        }
+    }
+
     int mid_count = 0;
     vector<NODE> input;
-    int c = 0;
       
     vector<pair<int,int> > L;
     for(int i = 0;i < left.size();i++){
         if(L_valid[i] == 1){
-            L.push_back(make_pair(left[i].size(), i));
+            L.push_back(make_pair(L_Deg[i], i));
         }
     }
+
+    printf("size of search space : %d\n", L.size());
 
     /**
      * @brief try different vertex ordering.
@@ -328,89 +598,79 @@ vector<NODE> Bi2Tri::duplicate_allowed_compress(){
      */
     sort(L.begin(), L.end(), degree_compar);
 
-    int* visited = new int[left.size()];
-    memset(visited, 0, sizeof(ui) * left.size());
-
-    int* jump = new int[left.size()];
-    memset(jump, 0, sizeof(ui) * left.size());
-
-    int* start = new int[left.size()];
-    
-    int* local_degree = new int[left.size()];
-
-    int* local_dest = new int[right.size()];
-
     for(int q = 0, s = L.size();q < s;q++){ 
         int i = L[q].second;
-        // if(jump[i] == 1){
-        //     continue;
-        // } 
-        ui degs = 0;
+        if(L_remain[i] <= 0) continue;
+        int degs = 0;
         vector<int> one_hop, two_hop;
         tagL[i] = 1;
-        one_hop.resize(max_degree);
-        two_hop.resize(max_degree * max_degree);
+        one_hop.reserve(max_degree * 2);
+        two_hop.reserve(max_degree * max_degree);
+
         for(int j = 0;j < left[i].size();j++) {
-            int r = left[i][j];
-            tagR[r] = 1;
-            one_hop.push_back(r);
-            for(int k = 0;k < right[r].size();k++) {
-                int l = right[r][k];
-                if(l != i){
-                    tagL[l]++;
-                    if(tagL[l] == 2){      // // two_hop store the vertices with degree >= 2;
-                        two_hop.push_back(l);
+            int r = left[i][j].dst;
+            if(R_valid[r] == 1 ){
+                if(undirected_edge_state[left[i][j].uid].is_compressed == 0){
+                    tagR[r] = 2;
+                    one_hop.push_back(r);
+                    for(int k = 0;k < right[r].size();k++) {
+                        int l = right[r][k].dst;
+                        if(L_valid[l] == 1 && undirected_edge_state[right[r][k].uid].is_compressed == 0){
+                            if(l != i){
+                                tagL[l]++;
+                                // two_hop store the vertices with degree >= 2;
+                                if(tagL[l] == 3) {     
+                                    two_hop.push_back(l);
+                                }
+                            }
+                        }
                     }
+                }
+                else{
+                    tagR[r] = 1;
                 }
             }
         }
 
+        if(one_hop.size() == 1 || two_hop.size() == 0){
+            continue;
+        }
+
+        for(auto& x : one_hop){
+            tagR[x] = 1;
+        }
+
         
-        // apply the reductions for the extracted subgraph.
-        subgraph_reduce();
-        
-        ui vs = left[i].size();
         priority_queue<pair<int, int>> pq;
         float threshold = 0;
-        int delta_max = -1; // neg-infinity       
-        // for each candidate, calculate the profit.
+        //score for each candidate.   
         for(auto& x : two_hop){
-            int d_count = 0, v_count = 0;
-            for(int j = 0;j < left[x].size();j++) {
-            // for(auto& xr : left[x]) {
-                int xr = left[x][j];
-                if(tagR[xr] == 1){
-                    v_count++;
-                }
-            }
-            ver_intersec[x] = v_count;
-            delta_max = max(delta_max, v_count);
-            pq.push(make_pair(ver_intersec[x], x));   
+            pq.push(make_pair(tagL[x], x));
         }
 
         // choose the vertex with highest score.
         vector<int> Ls;
         Ls.push_back(i);
-        ui Rs = 0;
+        int Rs = 0;
         int times = 1;
         while(!pq.empty()){
             // printf("%d\n", pq.size());
              // update the thresho ld.
-            pair<int, int>  p = pq.top();
+            pair<int, int> p = pq.top();
             pq.pop();
             if(p.first <= (int)floor(threshold)){
                 break;
             }
-            if(p.first != ver_intersec[p.second]){
+            if(p.first != tagL[p.second]){
                 continue;
             }
             Ls.push_back(p.second);
             tagL[p.second] = 0;
+            // temp records the number of common neighbors.
             int temp = 0;
             for(int j = 0;j < left[p.second].size();j++){
-            // for(auto& x : left[p.second]){ 
-                int x = left[p.second][j];
-                if(tagR[x] == times){
+                int x = left[p.second][j].dst;
+                if(R_valid[x] == 1 && tagR[x] == times){
                     tagR[x]++;   
                     temp++;
                 }
@@ -418,49 +678,32 @@ vector<NODE> Bi2Tri::duplicate_allowed_compress(){
             times++;
             Rs = temp;
             
+            // update the score for each candidate.
             vector<int> update; 
             for(int j = 0;j < left[i].size();j++) {
-            // for(auto& x : left[i]){
-                int x = left[i][j];
-                if(tagR[x] == times - 1){
+                int x = left[i][j].dst;
+                if(R_valid[x] == 1 && tagR[x] == times - 1){
                     // update the v_diff and d_diff
-                    for(auto& xl : right[x]) if(xl != i){
-                        ver_intersec[xl]--;
-                        // deg_intersec[xl] -= right[x].size();
-                        if(visited[xl] == 0){
+                    for(auto& xll : right[x]) {
+                        int xl = xll.dst;
+                        if(L_valid[xl] == 1 && xl != i){
+                            tagL[xl]--;
+                            // if(visited[xl] == 0){
                             update.push_back(xl);
-                            visited[xl] = 1;
+                                // visited[xl] = 1;
+                            // }
                         }
-                        // float s = ver_intersec[xl];
-                        // pq.push(make_pair(s, xl));
-                        // v_pq.push(make_pair(ver_intersec[xl], xl));
                     }
                 }
             }
 
             for(auto& xl : update){
-                int s = ver_intersec[xl];
-                pq.push(make_pair(s, xl));
-                // v_pq.push(make_pair(ver_intersec[xl], xl));
-                visited[xl] = 0;
-            }
-
-            // add a new virtual node controlled by the parameter *redundancy*.
-            vector<int> Rsol;
-            for(int j = 0;j < left[i].size();j++){
-                int r = left[i][j];
-                if(tagR[r] == times){
-                    Rsol.push_back(r);  
+                if(tagL[xl] > 1){
+                    pq.push(make_pair(tagL[xl], xl));
+                    // visited[xl] = 0;
                 }
             }
-            
-            if(Rsol.size() > 1 && Ls.size() > 1){
-                set<int> left_(Ls.begin(), Ls.end());
-                set<int> right_(Rsol.begin(), Rsol.end());
-                // printf("%d %d\n",right_.size() , left_.size());
-                input.push_back(NODE(mid_count++, left_, right_));
-            }
-            threshold = Ls.size() * Rs * 1.0 / (Ls.size() + 1);
+            threshold = Rs - (Rs - 1) / Ls.size();
         }
 
         
@@ -472,37 +715,50 @@ vector<NODE> Bi2Tri::duplicate_allowed_compress(){
         
         // pick out common neighbors of vertices in Ls.
         for(int j = 0;j < left[i].size();j++){
-            int r = left[i][j];
+            int r = left[i][j].dst;
             if(tagR[r] == times){
                 Rsol.push_back(r);  
             }
         }
         
+        int a = Ls.size(), b = Rsol.size();
         // generate the virtual node.
-        if(Rsol.size() > 1 && Ls.size() > 1){
+        if(a * b - a - b > 0){
+            // update the *isCompressed* state for *Rs X Ls*.
             for(auto& ls : Ls){
-                jump[ls] = 1;
+                L_remain[ls] -= (Ls.size() - 1);
+                for(auto& x: left[ls]){
+                    int r = x.dst;
+                    if(tagR[r] == times){
+                        // Rsol.push_back(r);  
+                        undirected_edge_state[x.uid].is_compressed = 1;
+                    }
+                }
             }
+            // printf("\nL:");
+            // for(auto& ls : Ls){
+            //     printf("%d ", ls);
+            // }
+            // printf("\n R:");
+            // for(auto& ls : Rsol){
+            //     printf("%d ", ls);
+            // }
             set<int> left_(Ls.begin(), Ls.end());
             set<int> right_(Rsol.begin(), Rsol.end());
             // printf("%d %d\n",right_.size() , left_.size());
-            input.push_back(NODE(mid_count++, left_, right_));
+            input.push_back(std::move(NODE(mid_count++, std::move(left_), std::move(right_))));
         }
 
         for(auto& r : left[i]){
-            tagR[r] = 0;
+            tagR[r.dst] = 0;
         }
     }
 
     delete[] tagL;
     delete[] tagR;
-    delete[] ver_intersec;
-    delete[] visited;
-    delete[] start;
-    delete[] local_degree;
-    delete[] local_dest;
-
-    printf("%d mid nodes are generated...\n", mid_count);
+    delete[] L_remain;
+    delete[] L_counter;
+    printf("\n %d mid nodes are generated...\n", mid_count);
 
     set<pair<int,int>> T;
     int ec = 0;
@@ -512,195 +768,270 @@ vector<NODE> Bi2Tri::duplicate_allowed_compress(){
         ec += node.left.size() + node.right.size();
         for(auto& l : node.left){
             for(auto& r : node.right){
-                T.insert(make_pair(l,r));
+                pair<int,int> p = make_pair(l,r);
+                // if(T.find(p)!= T.end()){
+                //     printf("duplicate\n");
+                // }
+                T.insert(p);
             }
         }
-    }    
+    }
+    // for(auto& p : T){
+    //     printf("%d %d\n", p.first, p.second);
+    // }    
     printf("Trigrahph size:%d Expanded: %d direct edges:%d\n", ec, T.size(), e - T.size());
     // assert(e -T.size() == c);
     printf("comrepssion ratio: %f %\n", (e - T.size() + ec) * 100.0 / this->e);   
     return input;
 }
 
-// convert the bigraph to trigraph
-// vector<NODE> Bi2Tri::convert(){
-//     int* tagL = new int[left.size()];
-//     memset(tagL, 0, sizeof(int) * left.size());
 
-//     int* tagR = new int[right.size()];
-//     memset(tagR, 0, sizeof(int) * right.size());
+vector<NODE> Bi2Tri::simplified_duplicate_allowed_compress(){
+    int* tagL = new int[left.size()];
+    memset(tagL, 0, sizeof(int) * left.size());
 
-//     ui* deg_intersec = new ui[left.size()];
-//     memset(deg_intersec, 0, sizeof(ui) * left.size());
+    int* tagR = new int[right.size()];
+    memset(tagR, 0, sizeof(int) * right.size());
 
-//     ui* ver_intersec = new ui[left.size()];
-//     memset(ver_intersec, 0, sizeof(ui) * left.size());
+    int* L_remain = new int[left.size()];
+    memset(L_remain, 0, sizeof(int) * left.size());
 
-//     // ui* deg= new ui[right.size()];
-//     // memset(deg, 0, sizeof(ui) * right.size());
-
-//     int mid_count = 0;
-//     // int midsize = 0;
-//     vector<NODE> input;
+    int* L_counter = new int[left.size()];
+    memset(L_counter, 0, sizeof(int) * left.size());
     
-//     int c = 0;
-//     for(int i = 0, s = left.size();i < s;i++) {
-//         // extract the two-hop neighbors for each vertex.
-//         // printf("%d th vertex is processed...\n", i);
-//         ui degs = 0;
-//         vector<int> one_hop, two_hop;
-//         tagL[i] = 1;
-//         for(auto& r : left[i]){
-//             degs += right[r].size();
-//             tagR[r] = 1;
-//             for(auto& l : right[r]){
-//                 if(!tagL[l]){
-//                     two_hop.push_back(l);
-//                     tagL[l] = 1;
-//                 }
-//             }
-//         }
+    // for(int l = 0, s = left.size();l < s; l++){
+    //     if(L_valid[l] == 1){
+    //         vector<int> N;
+    //         for(int i = 0, rs = left[l].size();i < rs;i++){
+    //             int r = left[l][i].dst;
+    //             if(R_valid[r] == 0) continue;
+    //             int two_counter = 0;
+    //             for(int j = 0, lls = right[r].size();j < lls;j++){
+    //                 int ll = right[r][j].dst;
+    //                 if(ll != l && L_valid[ll] == 1 && ll > l){
+    //                     L_counter[ll]++;
+    //                     if(L_counter[ll] == 1){
+    //                         N.push_back(ll);
+    //                     }
+    //                     if(L_counter[ll] == 3){
+    //                         L_remain[l]++;
+    //                         L_remain[ll]++;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         for(auto& x : N){
+    //             L_counter[x] = 0;
+    //         }
+    //     }
+    // }
 
-//         ui vs = left[i].size();
-//         priority_queue<pair<float, int>> pq;
-//         priority_queue<pair<int, int>> v_pq;
-//         float threshold = 0;
+    int mid_count = 0;
+    vector<NODE> input;
+      
+    vector<pair<int,int> > L;
+    for(int i = 0;i < left.size();i++){
+        if(L_valid[i] == 1){
+            L.push_back(make_pair(L_Deg[i], i));
+        }
+    }
 
-//         int delta_max = -1; // neg-infinity
-//         // calculate the difference for each vertex
-//         for(auto& x : two_hop){
-//             int d_count = 0, v_count = 0;
-//             for(auto& xr : left[x]){
-//                 if(tagR[xr] == 1){
-//                     v_count++;
-//                     d_count += right[xr].size();
-//                 }
-//             }
-//             deg_intersec[x] = d_count;
-//             ver_intersec[x] = v_count;
-//             delta_max = max(delta_max, v_count);
-//             pq.push(make_pair(ver_intersec[x], x));   
-//             // pq.push(make_pair(deg_intersec[x] * 1.0 / (ver_intersec[x] + 1), x));   
-//             v_pq.push(make_pair(v_count,x));
-//         }
+    printf("size of search space : %d\n", L.size());
+    /**
+     * @brief try different vertex ordering.
+     *  1. degree-degeneracy order
+     *  2. subgraph-degeneracy order
+     */
+    sort(L.begin(), L.end(), degree_compar);
 
-//         // printf("%f\n", threshold);
-//         vector<int> Ls;
-//         Ls.push_back(i);
-//         ui Rs = 0;
-//         int times = 1;
-//         while(!pq.empty()){
-//             // printf("%d %d\n", delta_max, (int)floor(threshold));
-//              // update the thresho ld.
-//             if(delta_max <= (int)floor(threshold)){
-//                 break;
-//             }
-//             pair<float, int>  p = pq.top();
-//             pq.pop();
-//             // assert(p.second < left.size());
-//             if(fabsf(p.first - ver_intersec[p.second]) > EPSINON){
-//                 continue;
-//             }
-//             // if(fabsf(p.first - deg_intersec[p.second] * 1.0 / (ver_intersec[p.second] + 1)) > EPSINON){
-//             //     continue;
-//             // }
-//             // printf("merge %d\n", p.second);
-//             Ls.push_back(p.second);
-//             tagL[p.second] = 0;
-//             int temp = 0;
-//             for(auto& x : left[p.second]){ 
-//                 // assert(x < right.size());
-//                 if(tagR[x] == times){
-//                     // printf("%d %d\n", x, tagR[x]);
-//                     tagR[x]++;   
-//                     temp++;
-//                     // printf("%d %d\n", x, tagR[x]);
-//                 }
-//             }
-//             // printf("\n");
-//             // for(auto& r : left[i]){
-//             //     printf("tagR:%d r:%d\n", tagR[r], r);
-//             //     // assert(r < right.size());
-//             // }
-//             // printf("\n");
-//             times++;
-//             Rs = temp;
-//             // printf("Rs:%d\n", Rs);
-//             for(auto& x : left[i]){
-//                 if(tagR[x] == times - 1){
-//                     // update the v_diff and d_diff
-//                     for(auto& xl : right[x]) if(xl != i){
-//                         ver_intersec[xl]--;
-//                         deg_intersec[xl] -= right[x].size();
-//                         float s = ver_intersec[xl];
-//                         // float s = deg_intersec[xl] * 1.0 / (ver_intersec[xl] + 1);
-//                         pq.push(make_pair(s, xl));
-//                         v_pq.push(make_pair(ver_intersec[xl], xl));
-//                     }
-//                 }
-//             }
-//             while(!v_pq.empty()){
-//                 // printf("L");
-//                 pair<int,int> t = v_pq.top();
-//                 v_pq.pop();
-//                 if(tagL[t.second] == 1 && ver_intersec[t.second] == t.first){
-//                     delta_max = t.first;
-//                     break;
-//                 }
-//             }
-//             threshold = Ls.size() * Rs * 1.0 / (Ls.size() + 1);
-//         }
-//         for(auto& x : two_hop){
-//             tagL[x] = 0;
-//         }
-//         tagL[i] = 0;
-//         vector<int> Rsol;
+    for(int q = 0, s = L.size();q < s;q++){ 
+        int i = L[q].second;
+        // if(L_remain[i] <= 0) continue;
+        int degs = 0;
+        vector<int> one_hop, two_hop;
+        tagL[i] = 1;
+        one_hop.reserve(max_degree * 2);
+        two_hop.reserve(max_degree * max_degree);
+
+        for(int j = 0;j < left[i].size();j++) {
+            int r = left[i][j].dst;
+            if(R_valid[r] == 1 ){
+                if(undirected_edge_state[left[i][j].uid].is_compressed == 0){
+                    tagR[r] = 2;
+                    one_hop.push_back(r);
+                    for(int k = 0;k < right[r].size();k++) {
+                        int l = right[r][k].dst;
+                        if(L_valid[l] == 1  && undirected_edge_state[right[r][k].uid].is_compressed == 0 ){
+                            if(l != i){
+                                tagL[l]++;
+                                // two_hop store the vertices with degree >= 2;
+                                if(tagL[l] == 10) {     
+                                    two_hop.push_back(l);
+                                }
+                            }
+                        }
+                    }
+                }
+                else{
+                    tagR[r] = 1;
+                }
+            }
+        }
+
+        if(one_hop.size() == 1 || two_hop.size() == 0){
+            continue;
+        }
+
+        for(auto& x : one_hop){
+            tagR[x] = 1;
+        }
+
+        priority_queue<pair<int, int>> pq;
+        float threshold = 0;
+        //score for each candidate.   
+        for(auto& x : two_hop){
+            pq.push(make_pair(tagL[x], x));
+        }
+
+        // choose the vertex with highest score.
+        vector<int> Ls;
+        Ls.push_back(i);
+        int Rs = 0;
+        int times = 1;
+        while(!pq.empty()){
+            // printf("%d\n", pq.size());
+             // update the thresho ld.
+            pair<int, int> p = pq.top();
+            pq.pop();
+            if(p.first <= (int)floor(threshold)){
+                break;
+            }
+            if(p.first != tagL[p.second]){
+                continue;
+            }
+            Ls.push_back(p.second);
+            tagL[p.second] = 0;
+            // temp records the number of common neighbors.
+            int temp = 0;
+            for(int j = 0;j < left[p.second].size();j++){
+                int x = left[p.second][j].dst;
+                if(R_valid[x] == 1 && tagR[x] == times){
+                    tagR[x]++;   
+                    temp++;
+                }
+            }
+            times++;
+            Rs = temp;
+            
+            // update the score for each candidate.
+            vector<int> update; 
+            for(int j = 0;j < left[i].size();j++) {
+                int x = left[i][j].dst;
+                if(R_valid[x] == 1 && tagR[x] == times - 1){
+                    // update the v_diff and d_diff
+                    for(auto& xll : right[x]) {
+                        int xl = xll.dst;
+                        if(L_valid[xl] == 1 && xl != i){
+                            tagL[xl]--;
+                            // if(visited[xl] == 0){
+                            update.push_back(xl);
+                                // visited[xl] = 1;
+                            // }
+                        }
+                    }
+                }
+            }
+
+            for(auto& xl : update){
+                if(tagL[xl] > 1){
+                    pq.push(make_pair(tagL[xl], xl));
+                    // visited[xl] = 0;
+                }
+            }
+            threshold = Rs - (Rs - 1) / Ls.size();
+        }
+
+        for(auto& x : two_hop){
+            tagL[x] = 0;
+        }
+        tagL[i] = 0;
+        vector<int> Rsol, Ridx;
         
-//         for(auto& r : left[i]){
-//             if(tagR[r] == times){
-//                 Rsol.push_back(r);  
-//             }
-//         }
-//         c += left[i].size() - Rsol.size();
-//         for(auto& r : left[i]){
-//             tagR[r] = 0;
-//         }
-//         if(Rsol.size() > 1 && Ls.size() > 1){
-//             set<int> left(Ls.begin(), Ls.end());
-//             set<int> right(Rsol.begin(), Rsol.end());
-//             input.push_back(NODE(mid_count++, left, right));  
-//         }
-//     }
+        // pick out common neighbors of vertices in Ls.
+        for(int j = 0;j < left[i].size();j++){
+            int r = left[i][j].dst;
+            if(tagR[r] == times){
+                Rsol.push_back(r);  
+            }
+        }
+        
+        int a = Ls.size(), b = Rsol.size();
+        // generate the virtual node.
+        if(a > 10 && b > 10){
+            // update the *isCompressed* state for *Rs X Ls*.
+            for(auto& ls : Ls){
+                L_remain[ls] -= (Ls.size() - 1);
+                for(auto& x: left[ls]){
+                    int r = x.dst;
+                    if(tagR[r] == times){
+                        // Rsol.push_back(r);  
+                        undirected_edge_state[x.uid].is_compressed = 1;
+                    }
+                }
+            }
+            mid_count++;
+            // printf("\nL:");
+            // for(auto& ls :  Ls){
+            //     printf("%d ", ls);
+            // }
+            // printf("\n R:");
+            // for(auto& ls : Rsol){
+            //     printf("%d ", ls);
+            // }
+            set<int> left_(Ls.begin(), Ls.end());
+            set<int> right_(Rsol.begin(), Rsol.end());
+            // printf("%d %d\n",right_.size() , left_.size());
+            input.push_back(std::move(NODE(mid_count++, std::move(left_), std::move(right_))));
+        }
 
+        for(auto& r : left[i]){
+            tagR[r.dst] = 0;
+        }
+    }
 
-//     delete[] tagL;
-//     delete[] tagR;
-//     delete[] ver_intersec;
-//     delete[] deg_intersec;
+    delete[] tagL;
+    delete[] tagR;
+    delete[] L_remain;
+    delete[] L_counter;
+    printf("\n %d mid nodes are generated...\n", mid_count);
 
-//     printf("%d mid nodes are generated...\n", mid_count);
+    set<pair<int,int>> T;
+    int ec = 0;
+    int k = 0;
+    for(auto& node : input){
+        k += node.left.size() * node.right.size();
+        ec += node.left.size() + node.right.size();
+        for(auto& l : node.left){
+            for(auto& r : node.right){
+                pair<int,int> p = make_pair(l,r);
+                // if(T.find(p)!= T.end()){
+                //     printf("duplicate\n");
+                // }
+                T.insert(p);
+            }
+        }
+    }
+    // for(auto& p : T){
+    //     printf("%d %d\n", p.first, p.second);
+    // }    
+    printf("Trigrahph size:%d Expanded: %d direct edges:%d\n", ec, T.size(), e - T.size());
+    // assert(e -T.size() == c);
+    printf("comrepssion ratio: %f %\n", ec * 100.0 / T.size());
+    printf("comrepssion ratio: %f %\n", (e - T.size() + ec) * 100.0 / this->e); 
+      
 
-//     set<pair<int,int>> T;
-//     // vector<vector<int>> T(left);
-//     for(auto& node : input){
-//         for(auto& l : node.left){
-//             for(auto& r : node.right){
-//                 // T[l][r] = -1;         
-//                 T.insert(make_pair(l,r));
-//             }
-//         }
-//     }
-    
-//     // assert(e -T.size() == c);
-//     printf("%lu edges are left... %d \n", e - T.size(), c);
-//     // report the compression ratio.
-//     // int es = 0;
-//     // for(int i = 0, s = left.size();i < s;i++){
-//     //     es += left[i].size();  
-//     // }
-    
-//     return input;
-// }
+    return input;
+}
 
 // compress the graph directly
 void Bi2Tri::duplicate_free_compress(){
@@ -710,13 +1041,13 @@ void Bi2Tri::duplicate_free_compress(){
     int* tagR = new int[right.size()];
     memset(tagR, 0, sizeof(int) * right.size());
 
-    // ui* deg_intersec = new ui[left.size()];
-    // memset(deg_intersec, 0, sizeof(ui) * left.size());
+    // int* deg_intersec = new int[left.size()];
+    // memset(deg_intersec, 0, sizeof(int) * left.size());
 
-    ui*  ver_intersec = new ui[left.size()];
-    memset(ver_intersec, 0, sizeof(ui) * left.size());
+    int*  arrival_counter = new int[left.size()];
+    memset(arrival_counter, 0, sizeof(int) * left.size());
 
-    vector<vector<int> > isEdge(left);
+    vector<vector<Edge> > isEdge(left);
     
     int mid_count = 0;
     // int midsize = 0;
@@ -732,25 +1063,25 @@ void Bi2Tri::duplicate_free_compress(){
     // sort(L.begin(), L.end(), compar);
 
     int* visited = new int[left.size()];
-    memset(visited, 0, sizeof(ui) * left.size());
+    memset(visited, 0, sizeof(int) * left.size());
 
-    int* jump = new int[left.size()];
-    memset(jump, 0, sizeof(ui) * left.size());
+    int* skip = new int[left.size()];
+    memset(skip, 0, sizeof(int) * left.size());
 
     for(int q = 0, s = L.size();q < s;q++) { 
         int i = L[q].second;
         // printf("%d th ..\n",q);
-        // if(jump[i] == 1) continue;
+        // if(skip[i] == 1) continue;
         // extract the two-hop neighbors for each vertex.
         // printf("%d th vertex is processed...\n", i);
-        ui degs = 0;
+        int degs = 0;
         vector<int> one_hop, two_hop;
         tagL[i] = 1;
-        for(int j = 0;j < left[i].size();j++) if(isEdge[i][j] != -1){
-            int r = left[i][j];
+        for(int j = 0;j < left[i].size();j++) if(isEdge[i][j].state != -1){
+            int r = left[i][j].dst;
             tagR[r] = 1;
             for(int k = 0;k < right[r].size();k++) {
-                int l = right[r][k];
+                int l = right[r][k].dst;
                 if(l != i){
                     tagL[l]++;
                     if(tagL[l] == 2){
@@ -762,7 +1093,7 @@ void Bi2Tri::duplicate_free_compress(){
         }
         // printf("%d\n", two_hop.size());
 
-        ui vs = left[i].size();
+        int vs = left[i].size();
         priority_queue<pair<int, int>> pq;
         float threshold = 0;
 
@@ -771,19 +1102,19 @@ void Bi2Tri::duplicate_free_compress(){
 
         for(auto& x : two_hop){
             int d_count = 0, v_count = 0;
-            for(int j = 0;j < left[x].size();j++) if(isEdge[x][j] != -1){
+            for(int j = 0;j < left[x].size();j++) if(isEdge[x][j].state != -1){
             // for(auto& xr : left[x]) {
-                int xr = left[x][j];
+                int xr = left[x][j].dst;
                 if(tagR[xr] == 1){
                     v_count++;
                     // d_count += right[xr].size();
                 }
             }
             // deg_intersec[x] = d_count;
-            ver_intersec[x] = v_count;
+            arrival_counter[x] = v_count;
             delta_max = max(delta_max, v_count);
-            pq.push(make_pair(ver_intersec[x], x));   
-            // pq.push(make_pair(deg_intersec[x] * 1.0 / (ver_intersec[x] + 1), x));   
+            pq.push(make_pair(arrival_counter[x], x));   
+            // pq.push(make_pair(deg_intersec[x] * 1.0 / (arrival_counter[x] + 1), x));   
             // v_pq.push(make_pair(v_count,x));
         }
 
@@ -794,14 +1125,14 @@ void Bi2Tri::duplicate_free_compress(){
         // int* next = new int[left.size()];
 
         // for(auto& x : two_hop){
-        //     next[x] = start[ver_intersec[x]];
-        //     start[ver_intersec[x]] = x;
+        //     next[x] = start[arrival_counter[x]];
+        //     start[arrival_counter[x]] = x;
         // }
 
         // printf("%f\n", threshold);
         vector<int> Ls;
         Ls.push_back(i);
-        ui Rs = 0;
+        int Rs = 0;
         int times = 1;
         // printf("3");
         // cerr << "2" << endl;
@@ -820,7 +1151,7 @@ void Bi2Tri::duplicate_free_compress(){
         //     // cerr << "5" << endl;
         //     for(v = start[delta_max]; v!= -1;){
         //         int tmp = next[v];
-        //         int d = ver_intersec[v];
+        //         int d = arrival_counter[v];
         //         // assert(d <= left[]);
         //         if(d < delta_max){
         //             // cerr << "6" << endl;
@@ -850,7 +1181,7 @@ void Bi2Tri::duplicate_free_compress(){
         //                 int x = left[i][j];
         //                 if(tagR[x] == times - 1){
         //                     for(auto& xl : right[x]) if(xl != i){
-        //                         ver_intersec[xl]--;
+        //                         arrival_counter[xl]--;
         //                     }
         //                 }
         //             }
@@ -877,22 +1208,22 @@ void Bi2Tri::duplicate_free_compress(){
             // pair<float, int>  p = pq.top();
             // pq.pop();
             // assert(p.second < left.size());
-            // if(fabsf(p.first - ver_intersec[p.second]) > EPSINON){
+            // if(fabsf(p.first - arrival_counter[p.second]) > EPSINON){
             //     continue;
             // }
-            if(p.first != ver_intersec[p.second]){
+            if(p.first != arrival_counter[p.second]){
                 continue;
             }
-            // if(fabsf(p.first - deg_intersec[p.second] * 1.0 / (ver_intersec[p.second] + 1)) > EPSINON){
+            // if(fabsf(p.first - deg_intersec[p.second] * 1.0 / (arrival_counter[p.second] + 1)) > EPSINON){
             //     continue;
             // }
             // printf("merge %d\n", p.second);
             Ls.push_back(p.second);
             tagL[p.second] = 0;
             int temp = 0;
-            for(int j = 0;j < left[p.second].size();j++) if(isEdge[p.second][j] != -1){
+            for(int j = 0;j < left[p.second].size();j++) if(isEdge[p.second][j].state != -1){
             // for(auto& x : left[p.second]){ 
-                int x = left[p.second][j];
+                int x = left[p.second][j].dst;
                 if(tagR[x] == times){
                     tagR[x]++;   
                     temp++;
@@ -903,29 +1234,29 @@ void Bi2Tri::duplicate_free_compress(){
             // printf("Rs:%d\n", Rs);
             
             vector<int> update; 
-            for(int j = 0;j < left[i].size();j++) if(isEdge[i][j] != -1){
+            for(int j = 0;j < left[i].size();j++) if(isEdge[i][j].state != -1){
             // for(auto& x : left[i]){
-                int x = left[i][j];
+                int x = left[i][j].dst;
                 if(tagR[x] == times - 1){
                     // update the v_diff and d_diff
-                    for(auto& xl : right[x]) if(xl != i){
-                        ver_intersec[xl]--;
+                    for(auto& xl : right[x]) if(xl.dst != i){
+                        arrival_counter[xl.dst]--;
                         // deg_intersec[xl] -= right[x].size();
-                        if(visited[xl] == 0){
-                            update.push_back(xl);
-                            visited[xl] = 1;
+                        if(visited[xl.dst] == 0){
+                            update.push_back(xl.dst);
+                            visited[xl.dst] = 1;
                         }
-                        // float s = ver_intersec[xl];
+                        // float s = arrival_counter[xl];
                         // pq.push(make_pair(s, xl));
-                        // v_pq.push(make_pair(ver_intersec[xl], xl));
+                        // v_pq.push(make_pair(arrival_counter[xl], xl));
                     }
                 }
             }
 
             for(auto& xl : update){
-                int s = ver_intersec[xl];
+                int s = arrival_counter[xl];
                 pq.push(make_pair(s, xl));
-                // v_pq.push(make_pair(ver_intersec[xl], xl));
+                // v_pq.push(make_pair(arrival_counter[xl], xl));
                 visited[xl] = 0;
             }
 
@@ -934,7 +1265,7 @@ void Bi2Tri::duplicate_free_compress(){
             //     // printf("L");
             //     pair<int,int> t = v_pq.top();
             //     v_pq.pop();
-            //     if(tagL[t.second] != 0  && ver_intersec[t.second] == t.first){
+            //     if(tagL[t.second] != 0  && arrival_counter[t.second] == t.first){
             //         delta_max = t.first;
             //         break;
             //     }
@@ -954,7 +1285,7 @@ void Bi2Tri::duplicate_free_compress(){
         vector<int> Rsol, Ridx;
         
         for(int j = 0;j < left[i].size();j++){
-            int r = left[i][j];
+            int r = left[i][j].dst;
             if(tagR[r] == times){
                 Rsol.push_back(r);  
             }
@@ -962,33 +1293,35 @@ void Bi2Tri::duplicate_free_compress(){
 
         // c += left[i].size() - Rsol.size();
         
-        if(Rsol.size() > 1 && Ls.size() > 1){
+        if(Rsol.size() > 10 && Ls.size() > 10){
             // printf("%d %dedges are compressed\n", Rsol.size() , Ls.size());
             set<int> left_(Ls.begin(), Ls.end());
             set<int> right_(Rsol.begin(), Rsol.end());
             // printf("%d %d\n",right_.size() , left_.size());
-            input.push_back(NODE(mid_count++, left_, right_));
+            // printf("%d %d\n",right_.size() , left_.size());
+            input.push_back(std::move(NODE(mid_count++, std::move(left_), std::move(right_))));
+            // input.push_back(NODE(mid_count++, left_, right_));
             for(auto& ls : Ls){
-                jump[ls] = 1;
+                skip[ls] = 1;
                 for(int j = 0;j < left[ls].size();j++){
-                    int r = left[ls][j];
-                    if(tagR[r] == times && isEdge[ls][j] != -1){
+                    int r = left[ls][j].dst;
+                    if(tagR[r] == times && isEdge[ls][j].state != -1){
                         // printf("delete: %d %d\n", ls, r);
-                        isEdge[ls][j] = -1;
+                        isEdge[ls][j].state = -1;
                     }
                 }
             }  
         }
 
         for(auto& r : left[i]){
-            tagR[r] = 0;
+            tagR[r.dst] = 0;
         }
     }
 
     delete[] tagL;
     delete[] tagR;
-    delete[] ver_intersec;
-    delete[] jump;
+    delete[] arrival_counter;
+    delete[] skip;
     // delete[] deg_intersec;
     delete[] visited;
     
@@ -1013,7 +1346,7 @@ void Bi2Tri::duplicate_free_compress(){
     for(int j = 0;j < isEdge.size();j++){
         auto& l = isEdge[j];
         for(auto& r : l){
-            if(r != -1){
+            if(r.state != -1){
                 // printf("%d %d\n", j, r);
                 ec++;
             }
@@ -1043,17 +1376,11 @@ void Bi2Tri::summary(){
         R += R_valid[i];
     }
 
-    // for(auto l : L_valid){
-    //     L += l;
-    // }
-    // for(auto r : R_valid){
-    //     R += r;
-    // }
     int e = 0;
     for(int i = 0,s = left.size();i < s;i++){
         if(L_valid[i] == 1){
             for(auto n : left[i]){
-                if(R_valid[n] == 1){
+                if(R_valid[n.dst] == 1){
                     e++;
                 }
             }
